@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sports Science Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root{
+--bg:#f8fafc;
+--panel:#ffffff;
+--border:#e5e7eb;
+--text:#0f172a;
+--muted:#64748b;
+--green:#16a34a;
+--orange:#f59e0b;
+--red:#dc2626;
+--blue:#2563eb;
+--purple:#7c3aed;
+}
+
+*{box-sizing:border-box}
+
+body{
+margin:0;
+padding:40px;
+font-family:'Inter',sans-serif;
+background:var(--bg);
+color:var(--text);
+}
+
+.container{max-width:1800px;margin:auto}
+
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px}
+
+.title{font-size:34px;font-weight:700}
+.subtitle{font-size:14px;color:var(--muted)}
+
+select{
+background:white;
+border:1px solid var(--border);
+padding:10px 14px;
+border-radius:10px;
+color:var(--text);
+font-size:14px;
+margin-left:10px
+}
+
+.card{
+background:var(--panel);
+border:1px solid var(--border);
+padding:22px;
+border-radius:14px;
+box-shadow:0 6px 18px rgba(0,0,0,0.06);
+}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:24px}
+
+.chart-title{font-size:15px;font-weight:600;margin-bottom:10px}
+
+canvas{width:100%!important;height:260px!important}
+
+.alert-box{
+background:#fff7ed;
+border:1px solid #fdba74;
+padding:16px;
+border-radius:12px;
+margin-bottom:30px
+}
+
+.alert-item{
+padding:10px 12px;
+margin-bottom:8px;
+border-radius:8px;
+background:#fee2e2;
+color:#7f1d1d
+}
+
+.metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.metric{background:#f1f5f9;padding:20px;border-radius:12px;text-align:center}
+.metric-value{font-size:30px;font-weight:700}
+.metric-label{font-size:13px;color:var(--muted)}
+
+.heatmap{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:10px}
+.cell{padding:8px;border-radius:6px;text-align:center;font-size:12px}
+.low{background:#bbf7d0}
+.medium{background:#fde68a}
+.high{background:#fecaca}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="header">
+<div>
+<div class="title">Athlete Monitoring Dashboard</div>
+<div class="subtitle">Wellness Monitoring + Performance</div>
+</div>
+
+<div>
+<select id="teamFilter">
+<option value="Todas">Todas as Equipes</option>
+<option value="15">Sub 15</option>
+<option value="18">Sub 18</option>
+<option value="21">Sub 21</option>
+<option value="24">Sub 24</option>
+</select>
+
+<select id="athleteFilter">
+<option value="Equipe">Equipe (Todos)</option>
+</select>
+</div>
+</div>
+
+<h3>Alertas de Recuperação e Bem‑Estar</h3>
+<div class="alert-box" id="alerts"></div>
+
+<h3>Wellness Diário</h3>
+<div class="grid">
+<div class="card"><div class="chart-title">Recuperação</div><canvas id="rec"></canvas></div>
+<div class="card"><div class="chart-title">Esforço (RPE)</div><canvas id="rpe"></canvas></div>
+<div class="card"><div class="chart-title">Sono</div><canvas id="sleep"></canvas></div>
+<div class="card"><div class="chart-title">Fadiga</div><canvas id="fad"></canvas></div>
+<div class="card"><div class="chart-title">Estresse</div><canvas id="est"></canvas></div>
+<div class="card"><div class="chart-title">Dor</div><canvas id="dor"></canvas></div>
+</div>
+
+
+</div>
+
+<h3 style="margin-top:40px">Comparação entre Equipes</h3>
+<div class="card">
+<canvas id="teamCompare"></canvas>
+</div>
+
+<h3 style="margin-top:40px">Performance Física</h3>
+<div class="card">
+<canvas id="performance"></canvas>
+</div>
+
+<h3 style="margin-top:40px">Perfil do Atleta</h3>
+<div class="metric-grid">
+<div class="metric"><div id="cmjMetric" class="metric-value">-</div><div class="metric-label">CMJ</div></div>
+<div class="metric"><div id="sjMetric" class="metric-value">-</div><div class="metric-label">Squat Jump</div></div>
+<div class="metric"><div id="mbMetric" class="metric-value">-</div><div class="metric-label">Medicine Ball</div></div>
+</div>
+
+</div>
+
+<script>
+
+const sheetURL="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2zqGesxYsRhgphN6dpzLhoCCHk54JzzXT7PEFYhLni7uegkBTxRrj8_q3ZzJdN9P77Uum8C078cD8/pub?gid=1108601119&single=true&output=csv"
+
+let rawData=[]
+let charts={}
+
+function mean(arr){return arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0}
+function safe(v){return v?Number(v):0}
+
+function getTeam(name){
+const parts=name.trim().split(" ")
+return parts[parts.length-1]
+}
+
+function buildAlerts(){
+
+const container=document.getElementById("alerts")
+container.innerHTML=""
+
+const athletes=[...new Set(rawData.map(d=>d['Nome']))]
+
+athletes.forEach(a=>{
+
+const rows=rawData.filter(r=>r['Nome']===a)
+const last=rows[rows.length-1]
+
+const rec=safe(last['RECUPERAÇÃO'])
+const sono=safe(last['SONO'])
+const fad=safe(last['FADIGA'])
+const est=safe(last['ESTRESSE'])
+const dor=safe(last['DOR'])
+
+let issues=[]
+
+if(rec<6) issues.push("Recuperação < 6")
+if(sono<4) issues.push("Sono < 4")
+if(fad<4) issues.push("Fadiga < 4")
+if(est<4) issues.push("Estresse < 4")
+if(dor<4) issues.push("Dor < 4")
+
+if(issues.length>0){
+const div=document.createElement("div")
+div.className="alert-item"
+div.innerHTML=`<strong>${a}</strong> → ${issues.join(', ')}`
+container.appendChild(div)
+}
+
+})
+
+if(container.innerHTML===""){
+container.innerHTML="<div style='color:green'>Nenhum alerta no momento</div>"
+}
+
+}
+
+function lineChart(id,labels,data,color,min,max){
+
+if(charts[id]) charts[id].destroy()
+
+charts[id]=new Chart(document.getElementById(id),{
+ type:'line',
+ data:{labels:labels,datasets:[{data:data,borderColor:color,tension:.35,borderWidth:3}]},
+ options:{
+ scales:{
+ y:{min:min,max:max}
+ },
+ plugins:{legend:{display:false}}
+ }
+})
+}
+
+
+function buildTeamComparison(){
+
+const teams=['15','18','21','24']
+
+const rec=[]
+
+teams.forEach(t=>{
+
+const rows=rawData.filter(r=>getTeam(r['Nome'])===t)
+
+rec.push(mean(rows.map(r=>safe(r['RECUPERAÇÃO']))))
+
+})
+
+if(charts.teamCompare) charts.teamCompare.destroy()
+
+charts.teamCompare=new Chart(document.getElementById("teamCompare"),{
+ type:'bar',
+ data:{
+ labels:['Sub15','Sub18','Sub21','Sub24'],
+ datasets:[{
+ label:'Recuperação Média',
+ data:rec,
+ backgroundColor:'#2563eb'
+ }]
+ }
+})
+
+}
+
+function buildPerformance(){
+
+const athletes=[...new Set(rawData.map(d=>d['Nome']))]
+
+const cmj=[]
+const sj=[]
+const mb=[]
+
+athletes.forEach(a=>{
+const row=rawData.find(r=>r['Nome']===a)
+cmj.push(safe(row['Média CMJ']))
+sj.push(safe(row['Média Squat Jump']))
+mb.push(safe(row['Arremesso Medicine Ball 1']))
+})
+
+if(charts.performance) charts.performance.destroy()
+
+charts.performance=new Chart(document.getElementById("performance"),{
+ type:'bar',
+ data:{labels:athletes,datasets:[
+ {label:'CMJ',data:cmj,backgroundColor:'#0891b2'},
+ {label:'Squat Jump',data:sj,backgroundColor:'#2563eb'},
+ {label:'Medicine Ball',data:mb,backgroundColor:'#7c3aed'}
+ ]}
+})
+
+}
+
+function groupDailyTeamAverage(data){
+
+const map={}
+
+ data.forEach(d=>{
+
+ let date=d['Carimbo de data/hora']
+ if(date){date=date.split(' ')[0]}
+
+ if(!map[date]){
+ map[date]={rec:[],rpe:[],sleep:[],fad:[],est:[],dor:[]}
+ }
+
+ map[date].rec.push(safe(d['RECUPERAÇÃO']))
+ map[date].rpe.push(safe(d['ESFORÇO']))
+ map[date].sleep.push(safe(d['SONO']))
+ map[date].fad.push(safe(d['FADIGA']))
+ map[date].est.push(safe(d['ESTRESSE']))
+ map[date].dor.push(safe(d['DOR']))
+
+ })
+
+ const labels=[]
+ const rec=[]
+ const rpe=[]
+ const sleep=[]
+ const fad=[]
+ const est=[]
+ const dor=[]
+
+ Object.keys(map).forEach(k=>{
+
+ labels.push(k)
+ rec.push(mean(map[k].rec))
+ rpe.push(mean(map[k].rpe))
+ sleep.push(mean(map[k].sleep))
+ fad.push(mean(map[k].fad))
+ est.push(mean(map[k].est))
+ dor.push(mean(map[k].dor))
+
+ })
+
+ return {labels,rec,rpe,sleep,fad,est,dor}
+
+}
+
+function updateDashboard(data){
+
+const athlete=document.getElementById("athleteFilter").value
+
+let labels,rec,rpe,sleep,fad,est,dor
+
+if(athlete==='Equipe'){
+
+ const agg=groupDailyTeamAverage(data)
+ labels=agg.labels
+ rec=agg.rec
+ rpe=agg.rpe
+ sleep=agg.sleep
+ fad=agg.fad
+ est=agg.est
+ dor=agg.dor
+
+}else{
+
+ labels=data.map(d=>d['Carimbo de data/hora'])
+ rec=data.map(d=>safe(d['RECUPERAÇÃO']))
+ rpe=data.map(d=>safe(d['ESFORÇO']))
+ sleep=data.map(d=>safe(d['SONO']))
+ fad=data.map(d=>safe(d['FADIGA']))
+ est=data.map(d=>safe(d['ESTRESSE']))
+ dor=data.map(d=>safe(d['DOR']))
+
+}
+
+lineChart("rec",labels,rec,'#16a34a',0,10)
+lineChart("rpe",labels,rpe,'#f59e0b',0,10)
+lineChart("sleep",labels,sleep,'#2563eb',0,10)
+lineChart("fad",labels,fad,'#f59e0b',0,10)
+lineChart("est",labels,est,'#dc2626',0,10)
+lineChart("dor",labels,dor,'#7c3aed',0,10)
+
+const first=data[0]
+
+if(first){
+ document.getElementById("cmjMetric").innerText=safe(first['Média CMJ'])
+ document.getElementById("sjMetric").innerText=safe(first['Média Squat Jump'])
+ document.getElementById("mbMetric").innerText=safe(first['Arremesso Medicine Ball 1'])
+}
+
+}
+
+function applyFilters(){
+
+ const team=document.getElementById("teamFilter").value
+ const athlete=document.getElementById("athleteFilter").value
+
+ let data=[...rawData]
+
+ if(team!=="Todas"){
+   data=data.filter(d=>getTeam(d['Nome'])===team)
+ }
+
+ if(athlete!=="Equipe"){
+   data=data.filter(d=>d['Nome']===athlete)
+ }
+
+ updateDashboard(data)
+
+}
+
+function populateAthletes(){
+
+const select=document.getElementById("athleteFilter")
+
+const athletes=[...new Set(rawData.map(d=>d['Nome']))]
+
+athletes.forEach(a=>{
+ const option=document.createElement("option")
+ option.value=a
+ option.text=a
+ select.appendChild(option)
+})
+
+select.addEventListener("change",applyFilters)
+
+document.getElementById("teamFilter").addEventListener("change",applyFilters)
+
+}
+
+function load(){
+
+Papa.parse(sheetURL,{download:true,header:true,complete:function(res){
+
+rawData=res.data.filter(r=>r['Nome'])
+
+populateAthletes()
+buildAlerts()
+buildPerformance()
+buildTeamComparison()
+updateDashboard(rawData)
+
+}})
+
+}
+
+load()
+
+</script>
+
+</body>
+</html>
