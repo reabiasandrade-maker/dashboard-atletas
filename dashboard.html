@@ -8,10 +8,155 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script>
-// registrar plugin de anotação corretamente
-if (window.ChartAnnotation) {
-  Chart.register(window.ChartAnnotation);
+
+const sheetURL="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2zqGesxYsRhgphN6dpzLhoCCHk54JzzXT7PEFYhLni7uegkBTxRrj8_q3ZzJdN9P77Uum8C078cD8/pub?gid=1108601119&single=true&output=csv"
+
+let rawData=[]
+let charts={}
+
+function safe(v){return v?Number(v):0}
+
+function getTeam(name){
+ const parts=name.trim().split(" ")
+ return parts[parts.length-1]
 }
+
+function buildAlerts(){
+
+const container=document.getElementById("alerts")
+container.innerHTML=""
+
+const athletes=[...new Set(rawData.map(d=>d['Nome']))]
+
+athletes.forEach(a=>{
+
+ const rows=rawData.filter(r=>r['Nome']===a)
+ const last=rows[rows.length-1]
+
+ const rec=safe(last['RECUPERAÇÃO'])
+ const sono=safe(last['SONO'])
+ const fad=safe(last['FADIGA'])
+ const est=safe(last['ESTRESSE'])
+ const dor=safe(last['DOR'])
+
+ let issues=[]
+
+ if(rec<6) issues.push("Recuperação < 6")
+ if(sono<4) issues.push("Sono < 4")
+ if(fad<4) issues.push("Fadiga < 4")
+ if(est<4) issues.push("Estresse < 4")
+ if(dor<4) issues.push("Dor < 4")
+
+ if(issues.length>0){
+  const div=document.createElement("div")
+  div.className="alert-item"
+  div.innerHTML=`<strong>${a}</strong> → ${issues.join(', ')}`
+  container.appendChild(div)
+ }
+
+})
+
+if(container.innerHTML===""){
+ container.innerHTML="<div style='color:green'>Nenhum alerta no momento</div>"
+}
+
+}
+
+function drawWellness(labels,rec,rpe,sleep,fad,est,dor){
+
+if(charts.wellnessChart) charts.wellnessChart.destroy()
+
+charts.wellnessChart=new Chart(document.getElementById("wellnessChart"),{
+ type:'line',
+ data:{
+  labels:labels,
+  datasets:[
+   {label:'Recuperação',data:rec,borderColor:'#16a34a',tension:.35,borderWidth:3},
+   {label:'Esforço',data:rpe,borderColor:'#f59e0b',tension:.35,borderWidth:3},
+   {label:'Sono',data:sleep,borderColor:'#2563eb',tension:.35,borderWidth:3},
+   {label:'Fadiga',data:fad,borderColor:'#f97316',tension:.35,borderWidth:3},
+   {label:'Estresse',data:est,borderColor:'#dc2626',tension:.35,borderWidth:3},
+   {label:'Dor',data:dor,borderColor:'#7c3aed',tension:.35,borderWidth:3}
+  ]
+ },
+ options:{
+  responsive:true,
+  plugins:{legend:{labels:{font:{size:14}}}},
+  scales:{y:{min:0,max:10}}
+ }
+})
+
+}
+
+function updateDashboard(data){
+
+const labels=data.map(d=>d['Carimbo de data/hora'])
+
+const rec=data.map(d=>safe(d['RECUPERAÇÃO']))
+const rpe=data.map(d=>safe(d['ESFORÇO']))
+const sleep=data.map(d=>safe(d['SONO']))
+const fad=data.map(d=>safe(d['FADIGA']))
+const est=data.map(d=>safe(d['ESTRESSE']))
+const dor=data.map(d=>safe(d['DOR']))
+
+ drawWellness(labels,rec,rpe,sleep,fad,est,dor)
+
+}
+
+function applyFilters(){
+
+ const team=document.getElementById("teamFilter").value
+ const athlete=document.getElementById("athleteFilter").value
+
+ let data=[...rawData]
+
+ if(team!=="Todas"){
+  data=data.filter(d=>getTeam(d['Nome'])===team)
+ }
+
+ if(athlete!=="Equipe"){
+  data=data.filter(d=>d['Nome']===athlete)
+ }
+
+ updateDashboard(data)
+
+}
+
+function populateAthletes(){
+
+const select=document.getElementById("athleteFilter")
+
+const athletes=[...new Set(rawData.map(d=>d['Nome']))]
+
+athletes.forEach(a=>{
+ const option=document.createElement("option")
+ option.value=a
+ option.text=a
+ select.appendChild(option)
+})
+
+select.addEventListener("change",applyFilters)
+
+document.getElementById("teamFilter").addEventListener("change",applyFilters)
+
+}
+
+function load(){
+
+Papa.parse(sheetURL,{download:true,header:true,complete:function(res){
+
+ rawData=res.data.filter(r=>r['Nome'])
+
+ populateAthletes()
+ buildAlerts()
+ updateDashboard(rawData)
+
+}})
+
+}
+
+load()
+
 </script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
