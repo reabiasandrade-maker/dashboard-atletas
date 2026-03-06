@@ -34,11 +34,11 @@ background:var(--bg);
 color:var(--text);
 }
 
-.container{max-width:1800px;margin:auto}
+.container{max-width:1600px;margin:auto}
 
 .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px}
 
-.title{font-size:34px;font-weight:700}
+.title{font-size:32px;font-weight:700}
 .subtitle{font-size:14px;color:var(--muted)}
 
 select{
@@ -57,13 +57,12 @@ border:1px solid var(--border);
 padding:22px;
 border-radius:14px;
 box-shadow:0 6px 18px rgba(0,0,0,0.06);
+margin-bottom:30px
 }
 
-.grid{display:block}
+.chart-title{font-size:16px;font-weight:600;margin-bottom:10px}
 
-.chart-title{font-size:15px;font-weight:600;margin-bottom:10px}
-
-canvas{width:100%!important;height:360px!important}
+canvas{width:100%!important;height:380px!important}
 
 .alert-box{
 background:#fff7ed;
@@ -83,14 +82,8 @@ color:#7f1d1d
 
 .metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
 .metric{background:#f1f5f9;padding:20px;border-radius:12px;text-align:center}
-.metric-value{font-size:30px;font-weight:700}
+.metric-value{font-size:28px;font-weight:700}
 .metric-label{font-size:13px;color:var(--muted)}
-
-.heatmap{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:10px}
-.cell{padding:8px;border-radius:6px;text-align:center;font-size:12px}
-.low{background:#bbf7d0}
-.medium{background:#fde68a}
-.high{background:#fecaca}
 
 </style>
 </head>
@@ -102,7 +95,7 @@ color:#7f1d1d
 <div class="header">
 <div>
 <div class="title">Athlete Monitoring Dashboard</div>
-<div class="subtitle">Wellness Monitoring + Performance</div>
+<div class="subtitle">Wellness Monitoring</div>
 </div>
 
 <div>
@@ -120,41 +113,26 @@ color:#7f1d1d
 </div>
 </div>
 
-<h3>Alertas de Recuperação e Bem‑Estar</h3>
+<h3>Atletas em Alerta</h3>
 <div class="alert-box" id="alerts"></div>
 
-<h3>Wellness Diário</h3>
 <div class="card">
 <div class="chart-title">Wellness Diário</div>
 <canvas id="wellnessChart"></canvas>
-</div><canvas id="rec"></canvas></div>
-<div class="card"><div class="chart-title">Esforço (RPE)</div><canvas id="rpe"></canvas></div>
-<div class="card"><div class="chart-title">Sono</div><canvas id="sleep"></canvas></div>
-<div class="card"><div class="chart-title">Fadiga</div><canvas id="fad"></canvas></div>
-<div class="card"><div class="chart-title">Estresse</div><canvas id="est"></canvas></div>
-<div class="card"><div class="chart-title">Dor</div><canvas id="dor"></canvas></div>
 </div>
 
-
-</div>
-
-<h3 style="margin-top:40px">Comparação entre Equipes</h3>
-<div class="card">
-<canvas id="teamCompare"></canvas>
-</div>
-
-<div id="performanceSection" style="display:none">
-<h3 style="margin-top:40px">Performance Física</h3>
-<div class="card">
+<div class="card" id="performanceSection" style="display:none">
+<div class="chart-title">Performance do Atleta</div>
 <canvas id="performance"></canvas>
 </div>
-</div>
 
-<h3 style="margin-top:40px">Perfil do Atleta</h3>
+<div class="card">
+<h3>Perfil do Atleta</h3>
 <div class="metric-grid">
 <div class="metric"><div id="cmjMetric" class="metric-value">-</div><div class="metric-label">CMJ</div></div>
 <div class="metric"><div id="sjMetric" class="metric-value">-</div><div class="metric-label">Squat Jump</div></div>
 <div class="metric"><div id="mbMetric" class="metric-value">-</div><div class="metric-label">Medicine Ball</div></div>
+</div>
 </div>
 
 </div>
@@ -210,132 +188,41 @@ container.appendChild(div)
 })
 
 if(container.innerHTML===""){
-container.innerHTML="<div style='color:green'>Nenhum alerta no momento</div>"
+container.innerHTML="<div style='color:green'>Nenhum alerta</div>"
 }
 
 }
 
-function lineChart(id,labels,data,color,min,max){
+function drawWellness(labels,rec,rpe,sleep,fad,est,dor){
 
-if(charts[id]) charts[id].destroy()
+if(charts.wellnessChart) charts.wellnessChart.destroy()
 
-charts[id]=new Chart(document.getElementById(id),{
+charts.wellnessChart=new Chart(document.getElementById("wellnessChart"),{
  type:'line',
- data:{labels:labels,datasets:[{data:data,borderColor:color,tension:.35,borderWidth:3}]},
- options:{
- scales:{
- y:{min:min,max:max}
- },
- plugins:{legend:{display:false}}
- }
-})
-}
-
-
-function buildTeamComparison(){
-
-const teams=['15','18','21','24']
-
-const rec=[]
-
-teams.forEach(t=>{
-
-const rows=rawData.filter(r=>getTeam(r['Nome'])===t)
-
-rec.push(mean(rows.map(r=>safe(r['RECUPERAÇÃO']))))
-
-})
-
-if(charts.teamCompare) charts.teamCompare.destroy()
-
-charts.teamCompare=new Chart(document.getElementById("teamCompare"),{
- type:'bar',
  data:{
- labels:['Sub15','Sub18','Sub21','Sub24'],
- datasets:[{
- label:'Recuperação Média',
- data:rec,
- backgroundColor:'#2563eb'
- }]
+ labels:labels,
+ datasets:[
+ {label:'Recuperação',data:rec,borderColor:'#16a34a',tension:.35,borderWidth:3},
+ {label:'Esforço',data:rpe,borderColor:'#f59e0b',tension:.35,borderWidth:3},
+ {label:'Sono',data:sleep,borderColor:'#2563eb',tension:.35,borderWidth:3},
+ {label:'Fadiga',data:fad,borderColor:'#f97316',tension:.35,borderWidth:3},
+ {label:'Estresse',data:est,borderColor:'#dc2626',tension:.35,borderWidth:3},
+ {label:'Dor',data:dor,borderColor:'#7c3aed',tension:.35,borderWidth:3}
+ ]
+ },
+ options:{
+ responsive:true,
+ plugins:{
+ legend:{labels:{font:{size:14,weight:'600'}}},
+ annotation:{annotations:{
+ zonaCritica:{type:'box',yMin:0,yMax:6,backgroundColor:'rgba(220,38,38,0.12)'},
+ zonaAlerta:{type:'box',yMin:6,yMax:7,backgroundColor:'rgba(234,179,8,0.18)'},
+ zonaIdeal:{type:'box',yMin:7,yMax:10,backgroundColor:'rgba(34,197,94,0.15)'}
+ }}
+ },
+ scales:{y:{min:0,max:10}}
  }
 })
-
-}
-
-function buildPerformance(){
-
-const athletes=[...new Set(rawData.map(d=>d['Nome']))]
-
-const cmj=[]
-const sj=[]
-const mb=[]
-
-athletes.forEach(a=>{
-const row=rawData.find(r=>r['Nome']===a)
-cmj.push(safe(row['Média CMJ']))
-sj.push(safe(row['Média Squat Jump']))
-mb.push(safe(row['Arremesso Medicine Ball 1']))
-})
-
-if(charts.performance) charts.performance.destroy()
-
-charts.performance=new Chart(document.getElementById("performance"),{
- type:'bar',
- data:{labels:athletes,datasets:[
- {label:'CMJ',data:cmj,backgroundColor:'#0891b2'},
- {label:'Squat Jump',data:sj,backgroundColor:'#2563eb'},
- {label:'Medicine Ball',data:mb,backgroundColor:'#7c3aed'}
- ]}
-})
-
-}
-
-function groupDailyTeamAverage(data){
-
-const map={}
-
- data.forEach(d=>{
-
- let date=d['Carimbo de data/hora']
- if(date){date=date.split(' ')[0]}
-
- const turno=d['Fase']?` ${d['Fase']}`:''
- const key=date+turno
-
- if(!map[key]){
- map[key]={rec:[],rpe:[],sleep:[],fad:[],est:[],dor:[]}
- }
-
- map[key].rec.push(safe(d['RECUPERAÇÃO']))
- map[key].rpe.push(safe(d['ESFORÇO']))
- map[key].sleep.push(safe(d['SONO']))
- map[key].fad.push(safe(d['FADIGA']))
- map[key].est.push(safe(d['ESTRESSE']))
- map[key].dor.push(safe(d['DOR']))
-
- })
-
- const labels=[]
- const rec=[]
- const rpe=[]
- const sleep=[]
- const fad=[]
- const est=[]
- const dor=[]
-
- Object.keys(map).forEach(k=>{
-
- labels.push(k)
- rec.push(mean(map[k].rec))
- rpe.push(mean(map[k].rpe))
- sleep.push(mean(map[k].sleep))
- fad.push(mean(map[k].fad))
- est.push(mean(map[k].est))
- dor.push(mean(map[k].dor))
-
- })
-
- return {labels,rec,rpe,sleep,fad,est,dor}
 
 }
 
@@ -343,89 +230,28 @@ function updateDashboard(data){
 
 const athlete=document.getElementById("athleteFilter").value
 
-let labels,rec,rpe,sleep,fad,est,dor
-
-if(athlete==='Equipe'){
-
- const agg=groupDailyTeamAverage(data)
- labels=agg.labels
- rec=agg.rec
- rpe=agg.rpe
- sleep=agg.sleep
- fad=agg.fad
- est=agg.est
- dor=agg.dor
-
-}else{
-
- labels=data.map(d=>{
+const labels=data.map(d=>{
  const date=d['Carimbo de data/hora']?d['Carimbo de data/hora'].split(' ')[0]:''
  const turno=d['Fase']?` ${d['Fase']}`:''
  return date+turno
 })
- rec=data.map(d=>safe(d['RECUPERAÇÃO']))
- rpe=data.map(d=>safe(d['ESFORÇO']))
- sleep=data.map(d=>safe(d['SONO']))
- fad=data.map(d=>safe(d['FADIGA']))
- est=data.map(d=>safe(d['ESTRESSE']))
- dor=data.map(d=>safe(d['DOR']))
 
+const rec=data.map(d=>safe(d['RECUPERAÇÃO']))
+const rpe=data.map(d=>safe(d['ESFORÇO']))
+const sleep=data.map(d=>safe(d['SONO']))
+const fad=data.map(d=>safe(d['FADIGA']))
+const est=data.map(d=>safe(d['ESTRESSE']))
+const dor=data.map(d=>safe(d['DOR']))
+
+ drawWellness(labels,rec,rpe,sleep,fad,est,dor)
+
+const perf=document.getElementById("performanceSection")
+
+if(athlete==='Equipe'){
+ perf.style.display='none'
+}else{
+ perf.style.display='block'
 }
-
-if(charts.wellnessChart) charts.wellnessChart.destroy()
-
-charts.wellnessChart=new Chart(document.getElementById("wellnessChart"),{
- type:'line',
- data:{
-  labels:labels,
-  datasets:[
-   {label:'Recuperação',data:rec,borderColor:'#16a34a',tension:.35,borderWidth:3},
-   {label:'Esforço',data:rpe,borderColor:'#f59e0b',tension:.35,borderWidth:3},
-   {label:'Sono',data:sleep,borderColor:'#2563eb',tension:.35,borderWidth:3},
-   {label:'Fadiga',data:fad,borderColor:'#f97316',tension:.35,borderWidth:3},
-   {label:'Estresse',data:est,borderColor:'#dc2626',tension:.35,borderWidth:3},
-   {label:'Dor',data:dor,borderColor:'#7c3aed',tension:.35,borderWidth:3}
-  ]
- },
- options:{
-  scales:{y:{min:0,max:10}},
-  plugins:{
-   legend:{
-    display:true,
-    labels:{
-     font:{size:14,weight:'600',family:'Inter'},
-     padding:20,
-     usePointStyle:true
-    }
-   },
-   annotation:{
-    annotations:{
-     zonaCritica:{
-      type:'box',
-      yMin:0,
-      yMax:6,
-      backgroundColor:'rgba(220,38,38,0.12)',
-      borderWidth:0
-     },
-     zonaAlerta:{
-      type:'box',
-      yMin:6,
-      yMax:7,
-      backgroundColor:'rgba(234,179,8,0.18)',
-      borderWidth:0
-     },
-     zonaIdeal:{
-      type:'box',
-      yMin:7,
-      yMax:10,
-      backgroundColor:'rgba(34,197,94,0.15)',
-      borderWidth:0
-     }
-    }
-   }
-  }
- }
-})
 
 const first=data[0]
 
@@ -438,17 +264,6 @@ if(first){
 }
 
 function applyFilters(){
-
- const perf=document.getElementById('performanceSection')
-
- const team=document.getElementById("teamFilter").value
- const athlete=document.getElementById("athleteFilter").value
-
- if(athlete==='Equipe'){
-  perf.style.display='none'
- }else{
-  perf.style.display='block'
- }
 
  const team=document.getElementById("teamFilter").value
  const athlete=document.getElementById("athleteFilter").value
@@ -494,8 +309,6 @@ rawData=res.data.filter(r=>r['Nome'])
 
 populateAthletes()
 buildAlerts()
-buildPerformance()
-buildTeamComparison()
 updateDashboard(rawData)
 
 }})
