@@ -7,6 +7,12 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<script>
+// registrar plugin de anotação para evitar erro de gráfico
+if (window['chartjs-plugin-annotation']) {
+  Chart.register(window['chartjs-plugin-annotation']);
+}
+</script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
@@ -424,6 +430,9 @@ document.getElementById("teamFilter").addEventListener("change",applyFilters)
 }
 
 function load(){
+
+// garantir atualização inicial após carregar dados
+
 
 Papa.parse(sheetURL,{download:true,header:true,complete:function(res){
 
