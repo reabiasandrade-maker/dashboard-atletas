@@ -126,10 +126,21 @@ color:#7f1d1d
 <canvas id="performance"></canvas>
 </div>
 
-<div class="card">
+<div class="card" id="perfilSection" style="display:none">
 <h3>Perfil do Atleta</h3>
 <div class="metric-grid">
 <div class="metric"><div id="cmjMetric" class="metric-value">-</div><div class="metric-label">CMJ</div></div>
+<div class="metric"><div id="sjMetric" class="metric-value">-</div><div class="metric-label">Squat Jump</div></div>
+<div class="metric"><div id="mbMetric" class="metric-value">-</div><div class="metric-label">Medicine Ball</div></div>
+</div>
+</div>
+
+<div class="card" id="phasePerformance" style="display:none">
+<div class="chart-title">Performance por Fase</div>
+<canvas id="phaseChart"></canvas>
+</div>
+
+</div>
 <div class="metric"><div id="sjMetric" class="metric-value">-</div><div class="metric-label">Squat Jump</div></div>
 <div class="metric"><div id="mbMetric" class="metric-value">-</div><div class="metric-label">Medicine Ball</div></div>
 </div>
@@ -246,11 +257,17 @@ const dor=data.map(d=>safe(d['DOR']))
  drawWellness(labels,rec,rpe,sleep,fad,est,dor)
 
 const perf=document.getElementById("performanceSection")
+const perfil=document.getElementById("perfilSection")
+const phase=document.getElementById("phasePerformance")
 
 if(athlete==='Equipe'){
  perf.style.display='none'
+ perfil.style.display='none'
+ phase.style.display='none'
 }else{
  perf.style.display='block'
+ perfil.style.display='block'
+ phase.style.display='block'
 }
 
 const first=data[0]
@@ -259,6 +276,40 @@ if(first){
  document.getElementById("cmjMetric").innerText=safe(first['Média CMJ'])
  document.getElementById("sjMetric").innerText=safe(first['Média Squat Jump'])
  document.getElementById("mbMetric").innerText=safe(first['Arremesso Medicine Ball 1'])
+}
+
+// gráfico por fase
+if(athlete!=='Equipe'){
+
+const fases=[...new Set(data.map(d=>d['Fase']))]
+
+const cmj=[]
+const sj=[]
+const mb=[]
+
+fases.forEach(f=>{
+ const rows=data.filter(r=>r['Fase']===f)
+ cmj.push(mean(rows.map(r=>safe(r['Média CMJ']))))
+ sj.push(mean(rows.map(r=>safe(r['Média Squat Jump']))))
+ mb.push(mean(rows.map(r=>safe(r['Arremesso Medicine Ball 1']))))
+})
+
+if(charts.phaseChart) charts.phaseChart.destroy()
+
+charts.phaseChart=new Chart(document.getElementById("phaseChart"),{
+ type:'bar',
+ data:{
+  labels:fases,
+  datasets:[
+   {label:'CMJ',data:cmj,backgroundColor:'#0891b2'},
+   {label:'Squat Jump',data:sj,backgroundColor:'#2563eb'},
+   {label:'Medicine Ball',data:mb,backgroundColor:'#7c3aed'}
+  ]
+ }
+})
+
+}
+
 }
 
 }
