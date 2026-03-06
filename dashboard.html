@@ -63,7 +63,7 @@ box-shadow:0 6px 18px rgba(0,0,0,0.06);
 
 .chart-title{font-size:15px;font-weight:600;margin-bottom:10px}
 
-canvas{width:100%!important;height:260px!important}
+canvas{width:100%!important;height:360px!important}
 
 .alert-box{
 background:#fff7ed;
@@ -143,9 +143,11 @@ color:#7f1d1d
 <canvas id="teamCompare"></canvas>
 </div>
 
+<div id="performanceSection" style="display:none">
 <h3 style="margin-top:40px">Performance Física</h3>
 <div class="card">
 <canvas id="performance"></canvas>
+</div>
 </div>
 
 <h3 style="margin-top:40px">Perfil do Atleta</h3>
@@ -388,7 +390,14 @@ charts.wellnessChart=new Chart(document.getElementById("wellnessChart"),{
  options:{
   scales:{y:{min:0,max:10}},
   plugins:{
-   legend:{display:true},
+   legend:{
+    display:true,
+    labels:{
+     font:{size:14,weight:'600',family:'Inter'},
+     padding:20,
+     usePointStyle:true
+    }
+   },
    annotation:{
     annotations:{
      zonaCritica:{
@@ -429,6 +438,17 @@ if(first){
 }
 
 function applyFilters(){
+
+ const perf=document.getElementById('performanceSection')
+
+ const team=document.getElementById("teamFilter").value
+ const athlete=document.getElementById("athleteFilter").value
+
+ if(athlete==='Equipe'){
+  perf.style.display='none'
+ }else{
+  perf.style.display='block'
+ }
 
  const team=document.getElementById("teamFilter").value
  const athlete=document.getElementById("athleteFilter").value
