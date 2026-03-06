@@ -6,6 +6,7 @@
 <title>Sports Science Dashboard</title>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
@@ -58,7 +59,7 @@ border-radius:14px;
 box-shadow:0 6px 18px rgba(0,0,0,0.06);
 }
 
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:24px}
+.grid{display:block}
 
 .chart-title{font-size:15px;font-weight:600;margin-bottom:10px}
 
@@ -296,16 +297,19 @@ const map={}
  let date=d['Carimbo de data/hora']
  if(date){date=date.split(' ')[0]}
 
- if(!map[date]){
- map[date]={rec:[],rpe:[],sleep:[],fad:[],est:[],dor:[]}
+ const turno=d['Fase']?` ${d['Fase']}`:''
+ const key=date+turno
+
+ if(!map[key]){
+ map[key]={rec:[],rpe:[],sleep:[],fad:[],est:[],dor:[]}
  }
 
- map[date].rec.push(safe(d['RECUPERAÇÃO']))
- map[date].rpe.push(safe(d['ESFORÇO']))
- map[date].sleep.push(safe(d['SONO']))
- map[date].fad.push(safe(d['FADIGA']))
- map[date].est.push(safe(d['ESTRESSE']))
- map[date].dor.push(safe(d['DOR']))
+ map[key].rec.push(safe(d['RECUPERAÇÃO']))
+ map[key].rpe.push(safe(d['ESFORÇO']))
+ map[key].sleep.push(safe(d['SONO']))
+ map[key].fad.push(safe(d['FADIGA']))
+ map[key].est.push(safe(d['ESTRESSE']))
+ map[key].dor.push(safe(d['DOR']))
 
  })
 
@@ -352,7 +356,11 @@ if(athlete==='Equipe'){
 
 }else{
 
- labels=data.map(d=>d['Carimbo de data/hora'])
+ labels=data.map(d=>{
+ const date=d['Carimbo de data/hora']?d['Carimbo de data/hora'].split(' ')[0]:''
+ const turno=d['Fase']?` ${d['Fase']}`:''
+ return date+turno
+})
  rec=data.map(d=>safe(d['RECUPERAÇÃO']))
  rpe=data.map(d=>safe(d['ESFORÇO']))
  sleep=data.map(d=>safe(d['SONO']))
@@ -379,7 +387,34 @@ charts.wellnessChart=new Chart(document.getElementById("wellnessChart"),{
  },
  options:{
   scales:{y:{min:0,max:10}},
-  plugins:{legend:{display:true}}
+  plugins:{
+   legend:{display:true},
+   annotation:{
+    annotations:{
+     zonaCritica:{
+      type:'box',
+      yMin:0,
+      yMax:6,
+      backgroundColor:'rgba(220,38,38,0.12)',
+      borderWidth:0
+     },
+     zonaAlerta:{
+      type:'box',
+      yMin:6,
+      yMax:7,
+      backgroundColor:'rgba(234,179,8,0.18)',
+      borderWidth:0
+     },
+     zonaIdeal:{
+      type:'box',
+      yMin:7,
+      yMax:10,
+      backgroundColor:'rgba(34,197,94,0.15)',
+      borderWidth:0
+     }
+    }
+   }
+  }
  }
 })
 
