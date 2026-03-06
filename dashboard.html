@@ -8,9 +8,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script>
-// registrar plugin de anotação para evitar erro de gráfico
-if (window['chartjs-plugin-annotation']) {
-  Chart.register(window['chartjs-plugin-annotation']);
+// registrar plugin de anotação corretamente
+if (window.ChartAnnotation) {
+  Chart.register(window.ChartAnnotation);
 }
 </script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
