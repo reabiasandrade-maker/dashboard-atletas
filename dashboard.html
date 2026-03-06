@@ -100,8 +100,8 @@ color:#7f1d1d
 
 <div class="header">
 <div>
-<div class="title">Seleção Brasileira de Basede Judô</div>
-<div class="subtitle">Monitoração Fisiológica</div>
+<div class="title">Athlete Monitoring Dashboard</div>
+<div class="subtitle">Wellness Monitoring + Performance</div>
 </div>
 
 <div>
@@ -119,13 +119,15 @@ color:#7f1d1d
 </div>
 </div>
 
-<h3>Atletas em Alerta</h3>
+<h3>Alertas de Recuperação e Bem‑Estar</h3>
 <div class="alert-box" id="alerts"></div>
 
-<h3>Monitoração Fisiológica</h3>
-<div class="grid">
-<div class="card"><div class="chart-title">Recuperação</div><canvas id="rec"></canvas></div>
-<div class="card"><div class="chart-title">Esforço</div><canvas id="rpe"></canvas></div>
+<h3>Wellness Diário</h3>
+<div class="card">
+<div class="chart-title">Wellness Diário</div>
+<canvas id="wellnessChart"></canvas>
+</div><canvas id="rec"></canvas></div>
+<div class="card"><div class="chart-title">Esforço (RPE)</div><canvas id="rpe"></canvas></div>
 <div class="card"><div class="chart-title">Sono</div><canvas id="sleep"></canvas></div>
 <div class="card"><div class="chart-title">Fadiga</div><canvas id="fad"></canvas></div>
 <div class="card"><div class="chart-title">Estresse</div><canvas id="est"></canvas></div>
@@ -362,62 +364,23 @@ if(athlete==='Equipe'){
 
 if(charts.wellnessChart) charts.wellnessChart.destroy()
 
-charts.wellnessChart = new Chart(
-document.getElementById("wellnessChart"),
-{
-type:'line',
-data:{
-labels:labels,
-datasets:[
-{
-label:'Recuperação',
-data:rec,
-borderColor:'#16a34a',
-tension:.35,
-borderWidth:3
-},
-{
-label:'Esforço',
-data:rpe,
-borderColor:'#f59e0b',
-tension:.35,
-borderWidth:3
-},
-{
-label:'Sono',
-data:sleep,
-borderColor:'#2563eb',
-tension:.35,
-borderWidth:3
-},
-{
-label:'Fadiga',
-data:fad,
-borderColor:'#f97316',
-tension:.35,
-borderWidth:3
-},
-{
-label:'Estresse',
-data:est,
-borderColor:'#dc2626',
-tension:.35,
-borderWidth:3
-},
-{
-label:'Dor',
-data:dor,
-borderColor:'#7c3aed',
-tension:.35,
-borderWidth:3
-}
-]
-},
-options:{
-scales:{
-y:{min:0,max:10}
-}
-}
+charts.wellnessChart=new Chart(document.getElementById("wellnessChart"),{
+ type:'line',
+ data:{
+  labels:labels,
+  datasets:[
+   {label:'Recuperação',data:rec,borderColor:'#16a34a',tension:.35,borderWidth:3},
+   {label:'Esforço',data:rpe,borderColor:'#f59e0b',tension:.35,borderWidth:3},
+   {label:'Sono',data:sleep,borderColor:'#2563eb',tension:.35,borderWidth:3},
+   {label:'Fadiga',data:fad,borderColor:'#f97316',tension:.35,borderWidth:3},
+   {label:'Estresse',data:est,borderColor:'#dc2626',tension:.35,borderWidth:3},
+   {label:'Dor',data:dor,borderColor:'#7c3aed',tension:.35,borderWidth:3}
+  ]
+ },
+ options:{
+  scales:{y:{min:0,max:10}},
+  plugins:{legend:{display:true}}
+ }
 })
 
 const first=data[0]
