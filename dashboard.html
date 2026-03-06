@@ -241,10 +241,81 @@ function updateDashboard(data){
 
 const athlete=document.getElementById("athleteFilter").value
 
+// construir labels dia + turno
 const labels=data.map(d=>{
  const date=d['Carimbo de data/hora']?d['Carimbo de data/hora'].split(' ')[0]:''
  const turno=d['Fase']?` ${d['Fase']}`:''
  return date+turno
+})
+
+// wellness
+const rec=data.map(d=>safe(d['RECUPERAÇÃO']))
+const rpe=data.map(d=>safe(d['ESFORÇO']))
+const sleep=data.map(d=>safe(d['SONO']))
+const fad=data.map(d=>safe(d['FADIGA']))
+const est=data.map(d=>safe(d['ESTRESSE']))
+const dor=data.map(d=>safe(d['DOR']))
+
+// desenhar gráfico principal
+ drawWellness(labels,rec,rpe,sleep,fad,est,dor)
+
+const perf=document.getElementById("performanceSection")
+const perfil=document.getElementById("perfilSection")
+const phase=document.getElementById("phasePerformance")
+
+// MODO EQUIPE
+if(athlete==='Equipe'){
+ perf.style.display='none'
+ perfil.style.display='none'
+ phase.style.display='none'
+ return
+}
+
+// MODO ATLETA
+perf.style.display='none'
+perfil.style.display='block'
+phase.style.display='block'
+
+const first=data[0]
+
+if(first){
+ document.getElementById("cmjMetric").innerText=safe(first['Média CMJ'])
+ document.getElementById("sjMetric").innerText=safe(first['Média Squat Jump'])
+ document.getElementById("mbMetric").innerText=safe(first['Arremesso Medicine Ball 1'])
+}
+
+// gráfico de barras por fase
+const fases=[...new Set(data.map(d=>d['Fase']).filter(v=>v))]
+
+const cmj=[]
+const sj=[]
+const mb=[]
+
+fases.forEach(f=>{
+ const rows=data.filter(r=>r['Fase']===f)
+ cmj.push(mean(rows.map(r=>safe(r['Média CMJ']))))
+ sj.push(mean(rows.map(r=>safe(r['Média Squat Jump']))))
+ mb.push(mean(rows.map(r=>safe(r['Arremesso Medicine Ball 1']))))
+})
+
+if(charts.phaseChart) charts.phaseChart.destroy()
+
+charts.phaseChart=new Chart(document.getElementById("phaseChart"),{
+ type:'bar',
+ data:{
+  labels:fases,
+  datasets:[
+   {label:'CMJ',data:cmj,backgroundColor:'#0891b2'},
+   {label:'Squat Jump',data:sj,backgroundColor:'#2563eb'},
+   {label:'Medicine Ball',data:mb,backgroundColor:'#7c3aed'}
+  ]
+ },
+ options:{
+  plugins:{legend:{labels:{font:{size:14,weight:'600'}}}},
+  scales:{y:{beginAtZero:true}}
+ }
+})
+
 })
 
 const rec=data.map(d=>safe(d['RECUPERAÇÃO']))
