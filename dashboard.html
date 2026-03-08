@@ -221,6 +221,33 @@
       gap:10px;
     }
 
+    .heat-header{
+      display:grid;
+      grid-template-columns:1.2fr repeat(5, 44px);
+      align-items:center;
+      gap:8px;
+      margin-bottom:2px;
+    }
+
+    .heat-header-spacer{
+      font-size:12px;
+      font-weight:700;
+      color:var(--muted);
+    }
+
+    .heat-header-label{
+      height:28px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:8px;
+      background:#eef2f7;
+      color:#334155;
+      font-size:11px;
+      font-weight:800;
+      border:1px solid var(--border);
+    }
+
     .heat-row{
       display:grid;
       grid-template-columns:1.2fr repeat(5, 44px);
@@ -286,7 +313,8 @@
     #cmjPhaseChart,
     #sjPhaseChart,
     #mbPhaseChart,
-    #vo2Chart{height:320px !important;}
+    #vo2Chart,
+    #bodyCompChart{height:320px !important;}
 
     .modal-overlay{
       position:fixed;
@@ -425,6 +453,7 @@
         width:100%;
       }
 
+      .heat-header,
       .heat-row{
         grid-template-columns:1fr repeat(5, 38px);
       }
@@ -561,6 +590,16 @@
             </div>
             <canvas id="vo2Chart"></canvas>
           </div>
+
+          <div class="card" style="grid-column:1 / -1;">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Composição Corporal</div>
+                <div class="card-subtitle">Peso, %G, massa gorda, massa magra e % de massa magra</div>
+              </div>
+            </div>
+            <canvas id="bodyCompChart"></canvas>
+          </div>
         </div>
       </div>
 
@@ -572,11 +611,30 @@
               <div class="card-subtitle">Último registro de cada atleta</div>
             </div>
           </div>
+
+          <div class="heat-header">
+            <div class="heat-header-spacer">Atleta</div>
+            <div class="heat-header-label">REC</div>
+            <div class="heat-header-label">SON</div>
+            <div class="heat-header-label">FAD</div>
+            <div class="heat-header-label">EST</div>
+            <div class="heat-header-label">DOR</div>
+          </div>
+
           <div class="heatmap" id="heatmap"></div>
+
           <div class="legend">
             <span><i class="dot" style="background:#fecaca"></i> Baixo</span>
             <span><i class="dot" style="background:#fde68a"></i> Moderado</span>
             <span><i class="dot" style="background:#bbf7d0"></i> Adequado</span>
+          </div>
+
+          <div class="legend">
+            <span>REC = Recuperação</span>
+            <span>SON = Sono</span>
+            <span>FAD = Fadiga</span>
+            <span>EST = Estresse</span>
+            <span>DOR = Dor</span>
           </div>
         </div>
       </div>
@@ -686,6 +744,7 @@
       destroyChart("sjPhaseChart");
       destroyChart("mbPhaseChart");
       destroyChart("vo2Chart");
+      destroyChart("bodyCompChart");
     }
 
     function resetAthleteMetrics(){
@@ -756,6 +815,54 @@
         row["VO2"] ||
         row["VO2máx"] ||
         row["VO2 MÁX"]
+      );
+    }
+
+    function getPeso(row){
+      return safe(
+        row["PESO"] ||
+        row["Peso"] ||
+        row["MASSA CORPORAL"] ||
+        row["Massa corporal"]
+      );
+    }
+
+    function getPctG(row){
+      return safe(
+        row["%G"] ||
+        row["% G"] ||
+        row["PERCENTUAL DE GORDURA"] ||
+        row["% DE GORDURA"] ||
+        row["GORDURA %"] ||
+        row["Percentual de gordura"]
+      );
+    }
+
+    function getMassaGorda(row){
+      return safe(
+        row["MASSA GORDA"] ||
+        row["Massa gorda"] ||
+        row["KG GORDURA"] ||
+        row["GORDURA KG"]
+      );
+    }
+
+    function getMassaMagra(row){
+      return safe(
+        row["MASSA MAGRA"] ||
+        row["Massa magra"] ||
+        row["MM"] ||
+        row["MASSA LIVRE DE GORDURA"] ||
+        row["MLG"]
+      );
+    }
+
+    function getPctMassaMagra(row){
+      return safe(
+        row["% MASSA MAGRA"] ||
+        row["% DE MASSA MAGRA"] ||
+        row["PERCENTUAL DE MASSA MAGRA"] ||
+        row["MASSA MAGRA %"]
       );
     }
 
@@ -1050,6 +1157,78 @@
       });
     }
 
+    function drawBodyCompChart(labels, peso, pctG, massaGorda, massaMagra, pctMassaMagra){
+      destroyChart("bodyCompChart");
+
+      charts.bodyCompChart = new Chart(document.getElementById("bodyCompChart"), {
+        type:"line",
+        data:{
+          labels,
+          datasets:[
+            {
+              label:"Peso",
+              data:peso,
+              borderColor:"#0f766e",
+              backgroundColor:"#0f766e",
+              tension:0.25,
+              borderWidth:3,
+              pointRadius:3
+            },
+            {
+              label:"%G",
+              data:pctG,
+              borderColor:"#dc2626",
+              backgroundColor:"#dc2626",
+              tension:0.25,
+              borderWidth:3,
+              pointRadius:3
+            },
+            {
+              label:"Massa gorda",
+              data:massaGorda,
+              borderColor:"#f59e0b",
+              backgroundColor:"#f59e0b",
+              tension:0.25,
+              borderWidth:3,
+              pointRadius:3
+            },
+            {
+              label:"Massa magra",
+              data:massaMagra,
+              borderColor:"#2563eb",
+              backgroundColor:"#2563eb",
+              tension:0.25,
+              borderWidth:3,
+              pointRadius:3
+            },
+            {
+              label:"% massa magra",
+              data:pctMassaMagra,
+              borderColor:"#7c3aed",
+              backgroundColor:"#7c3aed",
+              tension:0.25,
+              borderWidth:3,
+              pointRadius:3
+            }
+          ]
+        },
+        options:{
+          ...baseChartOptions(),
+          scales:{
+            x:{
+              ticks:{color:"#475569", font:{size:11, weight:"600"}},
+              grid:{color:"rgba(148,163,184,0.12)"}
+            },
+            y:{
+              beginAtZero:false,
+              ticks:{color:"#475569", font:{size:11, weight:"600"}},
+              grid:{color:"rgba(148,163,184,0.12)"}
+            }
+          }
+        }
+      });
+    }
+
     function getAlertsDetails(data){
       const latestRows = getLatestRowByAthlete(data);
       const alerts = [];
@@ -1206,6 +1385,22 @@
       drawSinglePhaseBarChart("sjPhaseChart", "sjPhaseChart", "Squat Jump", fases, sjPhase, "#2563eb");
       drawSinglePhaseBarChart("mbPhaseChart", "mbPhaseChart", "Arremesso", fases, mbPhase, "#7c3aed");
       drawVO2Chart(fases, vo2Phase);
+
+      const bodyLabels = sorted.map(d => getDateLabel(d));
+      const pesoSeries = sorted.map(d => getPeso(d));
+      const pctGSeries = sorted.map(d => getPctG(d));
+      const massaGordaSeries = sorted.map(d => getMassaGorda(d));
+      const massaMagraSeries = sorted.map(d => getMassaMagra(d));
+      const pctMassaMagraSeries = sorted.map(d => getPctMassaMagra(d));
+
+      drawBodyCompChart(
+        bodyLabels,
+        pesoSeries,
+        pctGSeries,
+        massaGordaSeries,
+        massaMagraSeries,
+        pctMassaMagraSeries
+      );
     }
 
     function updateDashboard(){
