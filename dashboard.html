@@ -594,8 +594,8 @@
           <div class="card" style="grid-column:1 / -1;">
             <div class="card-header">
               <div>
-                <div class="card-title">Composição Corporal</div>
-                <div class="card-subtitle">Peso, %G, massa gorda, massa magra e % de massa magra</div>
+                <div class="card-title">Composição Corporal por Fase</div>
+                <div class="card-subtitle">1 avaliação por fase: peso, %G, massa gorda, massa magra e % massa magra</div>
               </div>
             </div>
             <canvas id="bodyCompChart"></canvas>
@@ -1386,20 +1386,31 @@
       drawSinglePhaseBarChart("mbPhaseChart", "mbPhaseChart", "Arremesso", fases, mbPhase, "#7c3aed");
       drawVO2Chart(fases, vo2Phase);
 
-      const bodyLabels = sorted.map(d => getDateLabel(d));
-      const pesoSeries = sorted.map(d => getPeso(d));
-      const pctGSeries = sorted.map(d => getPctG(d));
-      const massaGordaSeries = sorted.map(d => getMassaGorda(d));
-      const massaMagraSeries = sorted.map(d => getMassaMagra(d));
-      const pctMassaMagraSeries = sorted.map(d => getPctMassaMagra(d));
+      const bodyPhaseLabels = [...new Set(sorted.map(d => d["Fase"]).filter(Boolean))];
+
+      const pesoPhase = [];
+      const pctGPhase = [];
+      const massaGordaPhase = [];
+      const massaMagraPhase = [];
+      const pctMassaMagraPhase = [];
+
+      bodyPhaseLabels.forEach(f => {
+        const rows = sorted.filter(r => r["Fase"] === f);
+
+        pesoPhase.push(mean(rows.map(r => getPeso(r))));
+        pctGPhase.push(mean(rows.map(r => getPctG(r))));
+        massaGordaPhase.push(mean(rows.map(r => getMassaGorda(r))));
+        massaMagraPhase.push(mean(rows.map(r => getMassaMagra(r))));
+        pctMassaMagraPhase.push(mean(rows.map(r => getPctMassaMagra(r))));
+      });
 
       drawBodyCompChart(
-        bodyLabels,
-        pesoSeries,
-        pctGSeries,
-        massaGordaSeries,
-        massaMagraSeries,
-        pctMassaMagraSeries
+        bodyPhaseLabels,
+        pesoPhase,
+        pctGPhase,
+        massaGordaPhase,
+        massaMagraPhase,
+        pctMassaMagraPhase
       );
     }
 
