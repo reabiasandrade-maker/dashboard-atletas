@@ -28,7 +28,7 @@
 
     body{
       margin:0;
-      padding:40px;
+      padding:32px;
       font-family:'Inter',sans-serif;
       background:var(--bg);
       color:var(--text);
@@ -44,18 +44,26 @@
       justify-content:space-between;
       align-items:center;
       gap:20px;
-      margin-bottom:30px;
+      margin-bottom:28px;
       flex-wrap:wrap;
     }
 
     .title{
       font-size:32px;
       font-weight:700;
+      letter-spacing:-0.02em;
     }
 
     .subtitle{
       font-size:14px;
       color:var(--muted);
+      margin-top:4px;
+    }
+
+    .filters{
+      display:flex;
+      gap:12px;
+      flex-wrap:wrap;
     }
 
     select{
@@ -65,27 +73,31 @@
       border-radius:10px;
       color:var(--text);
       font-size:14px;
-      margin-left:10px;
+      min-width:180px;
     }
 
     .card{
       background:var(--panel);
       border:1px solid var(--border);
       padding:22px;
-      border-radius:14px;
-      box-shadow:0 6px 18px rgba(0,0,0,0.06);
-      margin-bottom:30px;
+      border-radius:16px;
+      box-shadow:0 8px 22px rgba(15,23,42,0.05);
+      margin-bottom:24px;
     }
 
     .chart-title{
       font-size:16px;
       font-weight:600;
-      margin-bottom:10px;
+      margin-bottom:12px;
     }
 
     canvas{
       width:100% !important;
-      height:420px !important;
+      height:430px !important;
+    }
+
+    #phaseChart{
+      height:400px !important;
     }
 
     .alert-box{
@@ -93,7 +105,7 @@
       border:1px solid #fdba74;
       padding:16px;
       border-radius:12px;
-      margin-bottom:30px;
+      margin-bottom:24px;
     }
 
     .alert-item{
@@ -102,12 +114,13 @@
       border-radius:8px;
       background:#fee2e2;
       color:#7f1d1d;
+      font-size:14px;
     }
 
     .metric-grid{
       display:grid;
       grid-template-columns:repeat(3,1fr);
-      gap:20px;
+      gap:18px;
     }
 
     .metric{
@@ -115,6 +128,7 @@
       padding:20px;
       border-radius:12px;
       text-align:center;
+      border:1px solid #e2e8f0;
     }
 
     .metric-value{
@@ -125,17 +139,26 @@
     .metric-label{
       font-size:13px;
       color:var(--muted);
+      margin-top:6px;
     }
 
     @media (max-width: 900px){
+      body{padding:18px}
+
       .metric-grid{
         grid-template-columns:1fr;
       }
 
-      select{
-        margin-left:0;
-        margin-top:10px;
+      .filters{
         width:100%;
+      }
+
+      select{
+        width:100%;
+      }
+
+      canvas{
+        height:360px !important;
       }
     }
   </style>
@@ -150,7 +173,7 @@
         <div class="subtitle">Wellness Monitoring</div>
       </div>
 
-      <div>
+      <div class="filters">
         <select id="teamFilter">
           <option value="Todas">Todas as Equipes</option>
           <option value="15">Sub 15</option>
@@ -210,7 +233,7 @@
     let charts = {};
 
     function mean(arr){
-      const valid = arr.filter(v => !isNaN(v));
+      const valid = arr.filter(v => !isNaN(v) && v !== 0);
       return valid.length ? valid.reduce((a,b)=>a+b,0) / valid.length : 0;
     }
 
@@ -231,19 +254,79 @@
       return parts[parts.length - 1];
     }
 
+    function formatDateBR(dateString){
+      if(!dateString) return "";
+      const onlyDate = dateString.split(" ")[0];
+      const parts = onlyDate.split("/");
+      if(parts.length === 3){
+        return `${parts[0]}/${parts[1]}`;
+      }
+      return onlyDate;
+    }
+
+    function getShiftLabel(row){
+      const raw = String(row["Fase"] || row["Turno"] || "").trim().toLowerCase();
+
+      if(
+        raw === "1" ||
+        raw === "turno 1" ||
+        raw === "fase 1" ||
+        raw.includes("1")
+      ){
+        return "Manhã";
+      }
+
+      if(
+        raw === "2" ||
+        raw === "turno 2" ||
+        raw === "fase 2" ||
+        raw.includes("2")
+      ){
+        return "Tarde";
+      }
+
+      return raw ? raw : "";
+    }
+
     function getDateLabel(row){
-      const rawDate = row["Carimbo de data/hora"] || "";
-      const date = rawDate.split(" ")[0] || "";
-      const fase = row["Fase"] ? ` - ${row["Fase"]}` : "";
-      return `${date}${fase}`;
+      const date = formatDateBR(row["Carimbo de data/hora"] || "");
+      const shift = getShiftLabel(row);
+      return shift ? `${date} • ${shift}` : date;
+    }
+
+    function getDateTimeValue(row){
+      const raw = row["Carimbo de data/hora"];
+      if(!raw) return 0;
+
+      const [datePart, timePart] = raw.split(" ");
+      if(!datePart) return 0;
+
+      const d = datePart.split("/");
+      if(d.length !== 3) return 0;
+
+      const day = d[0].padStart(2, "0");
+      const month = d[1].padStart(2, "0");
+      const year = d[2];
+      const time = timePart || "00:00:00";
+
+      return new Date(`${year}-${month}-${day}T${time}`).getTime();
     }
 
     function sortByTimestamp(data){
-      return [...data].sort((a, b) => {
-        const da = new Date(a["Carimbo de data/hora"] || 0).getTime();
-        const db = new Date(b["Carimbo de data/hora"] || 0).getTime();
-        return da - db;
-      });
+      return [...data].sort((a, b) => getDateTimeValue(a) - getDateTimeValue(b));
+    }
+
+    function resetAthleteMetrics(){
+      document.getElementById("cmjMetric").innerText = "-";
+      document.getElementById("sjMetric").innerText = "-";
+      document.getElementById("mbMetric").innerText = "-";
+    }
+
+    function destroyChart(name){
+      if(charts[name]){
+        charts[name].destroy();
+        charts[name] = null;
+      }
     }
 
     function buildAlerts(filteredTeam = "Todas"){
@@ -290,13 +373,60 @@
       }
     }
 
+    function baseChartOptions(yMin = 0, yMax = 10){
+      return {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: "index",
+          intersect: false
+        },
+        plugins: {
+          legend: {
+            labels: {
+              font: {
+                size: 13,
+                weight: "600"
+              },
+              usePointStyle: true,
+              pointStyle: "line"
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: "#475569",
+              maxRotation: 45,
+              minRotation: 45,
+              autoSkip: true,
+              maxTicksLimit: 18
+            },
+            grid: {
+              color: "rgba(148,163,184,0.12)"
+            }
+          },
+          y: {
+            min: yMin,
+            max: yMax,
+            ticks: {
+              color: "#475569"
+            },
+            grid: {
+              color: "rgba(148,163,184,0.12)"
+            }
+          }
+        }
+      };
+    }
+
     function drawWellness(labels, rec, rpe, sleep, fad, est, dor){
-      if(charts.wellnessChart) charts.wellnessChart.destroy();
+      destroyChart("wellnessChart");
 
       charts.wellnessChart = new Chart(document.getElementById("wellnessChart"), {
         type: "line",
         data: {
-          labels: labels,
+          labels,
           datasets: [
             {
               label: "Recuperação",
@@ -305,7 +435,8 @@
               backgroundColor: "#16a34a",
               tension: 0.35,
               borderWidth: 3,
-              pointRadius: 4
+              pointRadius: 3,
+              pointHoverRadius: 5
             },
             {
               label: "Esforço",
@@ -314,7 +445,8 @@
               backgroundColor: "#f59e0b",
               tension: 0.35,
               borderWidth: 3,
-              pointRadius: 4
+              pointRadius: 3,
+              pointHoverRadius: 5
             },
             {
               label: "Sono",
@@ -323,7 +455,8 @@
               backgroundColor: "#2563eb",
               tension: 0.35,
               borderWidth: 3,
-              pointRadius: 4
+              pointRadius: 3,
+              pointHoverRadius: 5
             },
             {
               label: "Fadiga",
@@ -332,7 +465,8 @@
               backgroundColor: "#f97316",
               tension: 0.35,
               borderWidth: 3,
-              pointRadius: 4
+              pointRadius: 3,
+              pointHoverRadius: 5
             },
             {
               label: "Estresse",
@@ -341,7 +475,8 @@
               backgroundColor: "#dc2626",
               tension: 0.35,
               borderWidth: 3,
-              pointRadius: 4
+              pointRadius: 3,
+              pointHoverRadius: 5
             },
             {
               label: "Dor",
@@ -350,68 +485,38 @@
               backgroundColor: "#7c3aed",
               tension: 0.35,
               borderWidth: 3,
-              pointRadius: 4
+              pointRadius: 3,
+              pointHoverRadius: 5
             }
           ]
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
+          ...baseChartOptions(0, 10),
           plugins: {
-            legend: {
-              labels: {
-                font: {
-                  size: 14,
-                  weight: "600"
-                }
-              }
-            },
+            ...baseChartOptions(0, 10).plugins,
             annotation: {
               annotations: {
                 zonaCritica: {
                   type: "box",
                   yMin: 0,
                   yMax: 6,
-                  backgroundColor: "rgba(220,38,38,0.12)",
+                  backgroundColor: "rgba(220,38,38,0.10)",
                   borderWidth: 0
                 },
                 zonaAlerta: {
                   type: "box",
                   yMin: 6,
                   yMax: 7,
-                  backgroundColor: "rgba(234,179,8,0.18)",
+                  backgroundColor: "rgba(245,158,11,0.12)",
                   borderWidth: 0
                 },
                 zonaIdeal: {
                   type: "box",
                   yMin: 7,
                   yMax: 10,
-                  backgroundColor: "rgba(34,197,94,0.15)",
+                  backgroundColor: "rgba(34,197,94,0.12)",
                   borderWidth: 0
                 }
-              }
-            }
-          },
-          scales: {
-            x: {
-              ticks: {
-                color: "#475569",
-                maxRotation: 45,
-                minRotation: 30
-              },
-              grid: {
-                color: "rgba(148,163,184,0.15)"
-              }
-            },
-            y: {
-              min: 0,
-              max: 10,
-              ticks: {
-                stepSize: 1,
-                color: "#475569"
-              },
-              grid: {
-                color: "rgba(148,163,184,0.15)"
               }
             }
           }
@@ -420,12 +525,12 @@
     }
 
     function drawPerformance(labels, cmj, sj, mb){
-      if(charts.performance) charts.performance.destroy();
+      destroyChart("performance");
 
       charts.performance = new Chart(document.getElementById("performance"), {
         type: "line",
         data: {
-          labels: labels,
+          labels,
           datasets: [
             {
               label: "CMJ",
@@ -434,7 +539,7 @@
               backgroundColor: "#0891b2",
               tension: 0.3,
               borderWidth: 3,
-              pointRadius: 4
+              pointRadius: 3
             },
             {
               label: "Squat Jump",
@@ -443,7 +548,7 @@
               backgroundColor: "#2563eb",
               tension: 0.3,
               borderWidth: 3,
-              pointRadius: 4
+              pointRadius: 3
             },
             {
               label: "Medicine Ball",
@@ -452,50 +557,16 @@
               backgroundColor: "#7c3aed",
               tension: 0.3,
               borderWidth: 3,
-              pointRadius: 4
+              pointRadius: 3
             }
           ]
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              labels: {
-                font: {
-                  size: 14,
-                  weight: "600"
-                }
-              }
-            }
-          },
-          scales: {
-            x: {
-              ticks: {
-                color: "#475569",
-                maxRotation: 45,
-                minRotation: 30
-              },
-              grid: {
-                color: "rgba(148,163,184,0.15)"
-              }
-            },
-            y: {
-              beginAtZero: true,
-              ticks: {
-                color: "#475569"
-              },
-              grid: {
-                color: "rgba(148,163,184,0.15)"
-              }
-            }
-          }
-        }
+        options: baseChartOptions()
       });
     }
 
     function drawPhaseChart(fases, cmj, sj, mb){
-      if(charts.phaseChart) charts.phaseChart.destroy();
+      destroyChart("phaseChart");
 
       charts.phaseChart = new Chart(document.getElementById("phaseChart"), {
         type: "bar",
@@ -505,40 +576,33 @@
             {
               label: "CMJ",
               data: cmj,
-              backgroundColor: "#0891b2"
+              backgroundColor: "#0891b2",
+              borderRadius: 8
             },
             {
               label: "Squat Jump",
               data: sj,
-              backgroundColor: "#2563eb"
+              backgroundColor: "#2563eb",
+              borderRadius: 8
             },
             {
               label: "Medicine Ball",
               data: mb,
-              backgroundColor: "#7c3aed"
+              backgroundColor: "#7c3aed",
+              borderRadius: 8
             }
           ]
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              labels: {
-                font: {
-                  size: 14,
-                  weight: "600"
-                }
-              }
-            }
-          },
+          ...baseChartOptions(),
           scales: {
             x: {
+              stacked: false,
               ticks: {
                 color: "#475569"
               },
               grid: {
-                color: "rgba(148,163,184,0.15)"
+                color: "rgba(148,163,184,0.12)"
               }
             },
             y: {
@@ -547,7 +611,7 @@
                 color: "#475569"
               },
               grid: {
-                color: "rgba(148,163,184,0.15)"
+                color: "rgba(148,163,184,0.12)"
               }
             }
           }
@@ -555,8 +619,39 @@
       });
     }
 
+    function getFilteredAthletesByTeam(team){
+      let data = [...rawData];
+
+      if(team !== "Todas"){
+        data = data.filter(d => getTeam(d["Nome"]) === team);
+      }
+
+      return [...new Set(data.map(d => d["Nome"]).filter(Boolean))].sort();
+    }
+
+    function populateAthletesByTeam(){
+      const team = document.getElementById("teamFilter").value;
+      const select = document.getElementById("athleteFilter");
+      const currentValue = select.value;
+
+      const athletes = getFilteredAthletesByTeam(team);
+
+      select.innerHTML = `<option value="Equipe">Equipe (Todos)</option>`;
+
+      athletes.forEach(a => {
+        const option = document.createElement("option");
+        option.value = a;
+        option.textContent = a;
+        select.appendChild(option);
+      });
+
+      const stillExists = athletes.includes(currentValue);
+      select.value = stillExists ? currentValue : "Equipe";
+    }
+
     function updateDashboard(data){
       const athlete = document.getElementById("athleteFilter").value;
+
       const perf = document.getElementById("performanceSection");
       const perfil = document.getElementById("perfilSection");
       const phase = document.getElementById("phasePerformance");
@@ -577,54 +672,43 @@
         perf.style.display = "none";
         perfil.style.display = "none";
         phase.style.display = "none";
-
-        if(charts.performance){
-          charts.performance.destroy();
-          charts.performance = null;
-        }
-
-        if(charts.phaseChart){
-          charts.phaseChart.destroy();
-          charts.phaseChart = null;
-        }
-
-        document.getElementById("cmjMetric").innerText = "-";
-        document.getElementById("sjMetric").innerText = "-";
-        document.getElementById("mbMetric").innerText = "-";
-      } else {
-        perf.style.display = "block";
-        perfil.style.display = "block";
-        phase.style.display = "block";
-
-        const perfLabels = sortedData.map(d => getDateLabel(d));
-        const cmjSeries = sortedData.map(d => safe(d["Média CMJ"]));
-        const sjSeries = sortedData.map(d => safe(d["Média Squat Jump"]));
-        const mbSeries = sortedData.map(d => safe(d["Arremesso Medicine Ball 1"]));
-
-        drawPerformance(perfLabels, cmjSeries, sjSeries, mbSeries);
-
-        const latest = sortedData[sortedData.length - 1];
-        if(latest){
-          document.getElementById("cmjMetric").innerText = formatMetric(latest["Média CMJ"]);
-          document.getElementById("sjMetric").innerText = formatMetric(latest["Média Squat Jump"]);
-          document.getElementById("mbMetric").innerText = formatMetric(latest["Arremesso Medicine Ball 1"]);
-        }
-
-        const fases = [...new Set(sortedData.map(d => d["Fase"]).filter(Boolean))];
-
-        const phaseCMJ = [];
-        const phaseSJ = [];
-        const phaseMB = [];
-
-        fases.forEach(f => {
-          const rows = sortedData.filter(r => r["Fase"] === f);
-          phaseCMJ.push(mean(rows.map(r => safe(r["Média CMJ"]))));
-          phaseSJ.push(mean(rows.map(r => safe(r["Média Squat Jump"]))));
-          phaseMB.push(mean(rows.map(r => safe(r["Arremesso Medicine Ball 1"]))));
-        });
-
-        drawPhaseChart(fases, phaseCMJ, phaseSJ, phaseMB);
+        destroyChart("performance");
+        destroyChart("phaseChart");
+        resetAthleteMetrics();
+        return;
       }
+
+      perf.style.display = "block";
+      perfil.style.display = "block";
+      phase.style.display = "block";
+
+      const perfLabels = sortedData.map(d => getDateLabel(d));
+      const cmjSeries = sortedData.map(d => safe(d["Média CMJ"]));
+      const sjSeries = sortedData.map(d => safe(d["Média Squat Jump"]));
+      const mbSeries = sortedData.map(d => safe(d["Arremesso Medicine Ball 1"]));
+
+      drawPerformance(perfLabels, cmjSeries, sjSeries, mbSeries);
+
+      const latest = sortedData[sortedData.length - 1];
+      if(latest){
+        document.getElementById("cmjMetric").innerText = formatMetric(latest["Média CMJ"]);
+        document.getElementById("sjMetric").innerText = formatMetric(latest["Média Squat Jump"]);
+        document.getElementById("mbMetric").innerText = formatMetric(latest["Arremesso Medicine Ball 1"]);
+      }
+
+      const fases = [...new Set(sortedData.map(d => d["Fase"]).filter(Boolean))];
+      const phaseCMJ = [];
+      const phaseSJ = [];
+      const phaseMB = [];
+
+      fases.forEach(f => {
+        const rows = sortedData.filter(r => r["Fase"] === f);
+        phaseCMJ.push(mean(rows.map(r => safe(r["Média CMJ"]))));
+        phaseSJ.push(mean(rows.map(r => safe(r["Média Squat Jump"]))));
+        phaseMB.push(mean(rows.map(r => safe(r["Arremesso Medicine Ball 1"]))));
+      });
+
+      drawPhaseChart(fases, phaseCMJ, phaseSJ, phaseMB);
     }
 
     function applyFilters(){
@@ -645,21 +729,13 @@
       updateDashboard(data);
     }
 
-    function populateAthletes(){
-      const select = document.getElementById("athleteFilter");
-      select.innerHTML = `<option value="Equipe">Equipe (Todos)</option>`;
-
-      const athletes = [...new Set(rawData.map(d => d["Nome"]).filter(Boolean))].sort();
-
-      athletes.forEach(a => {
-        const option = document.createElement("option");
-        option.value = a;
-        option.text = a;
-        select.appendChild(option);
+    function attachEvents(){
+      document.getElementById("teamFilter").addEventListener("change", () => {
+        populateAthletesByTeam();
+        applyFilters();
       });
 
-      select.addEventListener("change", applyFilters);
-      document.getElementById("teamFilter").addEventListener("change", applyFilters);
+      document.getElementById("athleteFilter").addEventListener("change", applyFilters);
     }
 
     function load(){
@@ -668,9 +744,9 @@
         header: true,
         complete: function(res){
           rawData = res.data.filter(r => r["Nome"]);
-          populateAthletes();
+          populateAthletesByTeam();
           buildAlerts();
-          updateDashboard(rawData);
+          applyFilters();
         },
         error: function(err){
           console.error("Erro ao carregar CSV:", err);
@@ -680,6 +756,7 @@
       });
     }
 
+    attachEvents();
     load();
   </script>
 </body>
