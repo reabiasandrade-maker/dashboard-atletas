@@ -102,6 +102,21 @@
       padding:18px;
     }
 
+    .kpi.clickable{
+      cursor:pointer;
+      transition:transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+
+    .kpi.clickable:hover{
+      transform:translateY(-2px);
+      box-shadow:0 14px 34px rgba(15,23,42,0.08);
+      border-color:#cbd5e1;
+    }
+
+    .kpi.clickable:active{
+      transform:translateY(0);
+    }
+
     .kpi-label{
       font-size:13px;
       color:var(--muted);
@@ -173,30 +188,6 @@
       background:var(--panel-soft);
       border:1px solid var(--border);
       color:var(--muted);
-    }
-
-    .alerts-list{
-      display:grid;
-      gap:10px;
-    }
-
-    .alert-item{
-      padding:12px 14px;
-      border-radius:12px;
-      border:1px solid #fecaca;
-      background:var(--red-soft);
-      color:#7f1d1d;
-      font-size:14px;
-    }
-
-    .alert-empty{
-      padding:12px 14px;
-      border-radius:12px;
-      border:1px solid #bbf7d0;
-      background:var(--green-soft);
-      color:#166534;
-      font-weight:700;
-      font-size:14px;
     }
 
     .mini-grid{
@@ -297,6 +288,114 @@
     #mbPhaseChart,
     #vo2Chart{height:320px !important;}
 
+    .modal-overlay{
+      position:fixed;
+      inset:0;
+      background:rgba(15,23,42,0.5);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:20px;
+      z-index:1000;
+    }
+
+    .modal-overlay.show{
+      display:flex;
+    }
+
+    .modal{
+      width:min(760px, 100%);
+      max-height:85vh;
+      overflow:auto;
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:20px;
+      box-shadow:0 24px 60px rgba(15,23,42,0.25);
+      padding:22px;
+    }
+
+    .modal-header{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:16px;
+      margin-bottom:16px;
+    }
+
+    .modal-title{
+      font-size:20px;
+      font-weight:800;
+      margin:0;
+    }
+
+    .modal-subtitle{
+      margin-top:4px;
+      color:var(--muted);
+      font-size:13px;
+    }
+
+    .modal-close{
+      border:none;
+      background:#eef2f7;
+      color:#334155;
+      width:38px;
+      height:38px;
+      border-radius:12px;
+      font-size:20px;
+      cursor:pointer;
+      font-weight:700;
+    }
+
+    .modal-close:hover{
+      background:#e2e8f0;
+    }
+
+    .modal-list{
+      display:grid;
+      gap:12px;
+    }
+
+    .modal-alert-item{
+      border:1px solid #fecaca;
+      background:#fff7f7;
+      border-radius:14px;
+      padding:14px 16px;
+    }
+
+    .modal-alert-name{
+      font-weight:800;
+      font-size:15px;
+      margin-bottom:8px;
+      color:#7f1d1d;
+    }
+
+    .modal-alert-criteria{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+
+    .criterion-tag{
+      display:inline-flex;
+      align-items:center;
+      padding:6px 10px;
+      border-radius:999px;
+      background:#fee2e2;
+      color:#991b1b;
+      font-size:12px;
+      font-weight:700;
+      border:1px solid #fecaca;
+    }
+
+    .modal-empty{
+      padding:14px 16px;
+      border-radius:14px;
+      background:#f0fdf4;
+      border:1px solid #bbf7d0;
+      color:#166534;
+      font-weight:700;
+    }
+
     @media (max-width: 1250px){
       .layout{
         grid-template-columns:1fr;
@@ -374,10 +473,10 @@
         <div class="kpi-sub">atletas no filtro atual</div>
       </div>
 
-      <div class="kpi" id="kpiAlertsCard">
+      <div class="kpi clickable" id="kpiAlertsCard" title="Clique para ver os atletas em alerta">
         <div class="kpi-label">Atletas em alerta</div>
         <div class="kpi-value" id="kpiAlerts">0</div>
-        <div class="kpi-sub">critérios de corte aplicados</div>
+        <div class="kpi-sub">clique para ver atletas e critérios</div>
       </div>
     </div>
 
@@ -466,16 +565,6 @@
       </div>
 
       <div class="stack">
-        <div class="card" id="alertsCard">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Atletas em Alerta</div>
-              <div class="card-subtitle">Baseado no registro mais recente</div>
-            </div>
-          </div>
-          <div class="alerts-list" id="alerts"></div>
-        </div>
-
         <div class="card" id="heatmapCard">
           <div class="card-header">
             <div>
@@ -495,11 +584,26 @@
 
   </div>
 
+  <div class="modal-overlay" id="alertsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title">Atletas em Alerta</h2>
+          <div class="modal-subtitle">Registro mais recente de cada atleta no filtro atual</div>
+        </div>
+        <button class="modal-close" id="closeAlertsModal" type="button">&times;</button>
+      </div>
+
+      <div class="modal-list" id="alertsModalList"></div>
+    </div>
+  </div>
+
   <script>
     const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2zqGesxYsRhgphN6dpzLhoCCHk54JzzXT7PEFYhLni7uegkBTxRrj8_q3ZzJdN9P77Uum8C078cD8/pub?gid=1108601119&single=true&output=csv";
 
     let rawData = [];
     let charts = {};
+    let currentAlertsData = [];
 
     function safe(v){
       if(v === null || v === undefined || v === "") return 0;
@@ -946,12 +1050,9 @@
       });
     }
 
-    function buildAlerts(data){
-      const container = document.getElementById("alerts");
-      container.innerHTML = "";
-
+    function getAlertsDetails(data){
       const latestRows = getLatestRowByAthlete(data);
-      let count = 0;
+      const alerts = [];
 
       latestRows.forEach(row => {
         const issues = [];
@@ -968,19 +1069,50 @@
         if(dor < 4) issues.push("Dor < 4");
 
         if(issues.length){
-          count++;
-          const div = document.createElement("div");
-          div.className = "alert-item";
-          div.innerHTML = `<strong>${row["Nome"]}</strong> → ${issues.join(", ")}`;
-          container.appendChild(div);
+          alerts.push({
+            nome: row["Nome"],
+            criterios: issues
+          });
         }
       });
 
-      if(!count){
-        container.innerHTML = `<div class="alert-empty">Nenhum alerta no filtro atual</div>`;
+      return alerts;
+    }
+
+    function updateAlertsKPI(data){
+      currentAlertsData = getAlertsDetails(data);
+      document.getElementById("kpiAlerts").innerText = currentAlertsData.length;
+    }
+
+    function openAlertsModal(){
+      const modal = document.getElementById("alertsModal");
+      const list = document.getElementById("alertsModalList");
+      list.innerHTML = "";
+
+      if(!currentAlertsData.length){
+        list.innerHTML = `<div class="modal-empty">Nenhum atleta em alerta no filtro atual.</div>`;
+      } else {
+        currentAlertsData.forEach(item => {
+          const div = document.createElement("div");
+          div.className = "modal-alert-item";
+
+          const criteriaHtml = item.criterios
+            .map(c => `<span class="criterion-tag">${c}</span>`)
+            .join("");
+
+          div.innerHTML = `
+            <div class="modal-alert-name">${item.nome}</div>
+            <div class="modal-alert-criteria">${criteriaHtml}</div>
+          `;
+          list.appendChild(div);
+        });
       }
 
-      document.getElementById("kpiAlerts").innerText = count;
+      modal.classList.add("show");
+    }
+
+    function closeAlertsModal(){
+      document.getElementById("alertsModal").classList.remove("show");
     }
 
     function buildHeatmap(data){
@@ -990,7 +1122,7 @@
       const latestRows = getLatestRowByAthlete(data);
 
       if(!latestRows.length){
-        container.innerHTML = `<div class="alert-empty">Sem dados para exibir heatmap</div>`;
+        container.innerHTML = `<div class="modal-empty">Sem dados para exibir heatmap</div>`;
         return;
       }
 
@@ -1080,24 +1212,21 @@
       const data = sortByTimestamp(getFilteredData());
       const athlete = document.getElementById("athleteFilter").value;
 
-      const alertsCard = document.getElementById("alertsCard");
       const heatmapCard = document.getElementById("heatmapCard");
       const kpiAlertsCard = document.getElementById("kpiAlertsCard");
 
       updateKPIs(data);
 
       if(athlete === "Equipe"){
-        alertsCard.style.display = "block";
         heatmapCard.style.display = "block";
         kpiAlertsCard.style.display = "block";
-
-        buildAlerts(data);
+        updateAlertsKPI(data);
         buildHeatmap(data);
       } else {
-        alertsCard.style.display = "none";
         heatmapCard.style.display = "none";
         kpiAlertsCard.style.display = "none";
         document.getElementById("kpiAlerts").innerText = "0";
+        currentAlertsData = [];
       }
 
       const labels = data.map(d => getDateLabel(d));
@@ -1148,6 +1277,26 @@
       });
 
       document.getElementById("athleteFilter").addEventListener("change", updateDashboard);
+
+      document.getElementById("kpiAlertsCard").addEventListener("click", () => {
+        if(document.getElementById("athleteFilter").value === "Equipe"){
+          openAlertsModal();
+        }
+      });
+
+      document.getElementById("closeAlertsModal").addEventListener("click", closeAlertsModal);
+
+      document.getElementById("alertsModal").addEventListener("click", (e) => {
+        if(e.target.id === "alertsModal"){
+          closeAlertsModal();
+        }
+      });
+
+      document.addEventListener("keydown", (e) => {
+        if(e.key === "Escape"){
+          closeAlertsModal();
+        }
+      });
     }
 
     function load(){
@@ -1161,7 +1310,6 @@
         },
         error:function(err){
           console.error("Erro ao carregar CSV:", err);
-          document.getElementById("alerts").innerHTML = `<div class="alert-item">Erro ao carregar os dados da planilha.</div>`;
         }
       });
     }
