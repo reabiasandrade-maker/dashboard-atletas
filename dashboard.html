@@ -25,7 +25,6 @@
       --red:#dc2626;
       --red-soft:#fee2e2;
       --blue:#2563eb;
-      --blue-soft:#dbeafe;
       --cyan:#0891b2;
       --purple:#7c3aed;
       --shadow:0 10px 30px rgba(15,23,42,0.06);
@@ -329,12 +328,6 @@
       gap:20px;
     }
 
-    .charts-grid-1{
-      display:grid;
-      grid-template-columns:1fr;
-      gap:20px;
-    }
-
     canvas{
       width:100% !important;
       height:390px !important;
@@ -439,7 +432,7 @@
         <div class="kpi-sub">último registro de cada atleta</div>
       </div>
 
-      <div class="kpi">
+      <div class="kpi" id="kpiAlertsCard">
         <div class="kpi-label">Atletas em alerta</div>
         <div class="kpi-value" id="kpiAlerts">0</div>
         <div class="kpi-sub">critérios de corte aplicados</div>
@@ -537,7 +530,7 @@
       </div>
 
       <div class="stack">
-        <div class="card">
+        <div class="card" id="alertsCard">
           <div class="card-header">
             <div>
               <div class="card-title">Atletas em Alerta</div>
@@ -547,7 +540,7 @@
           <div class="alerts-list" id="alerts"></div>
         </div>
 
-        <div class="card">
+        <div class="card" id="heatmapCard">
           <div class="card-header">
             <div>
               <div class="card-title">Heatmap de Prontidão</div>
@@ -562,7 +555,7 @@
           </div>
         </div>
 
-        <div class="card">
+        <div class="card" id="rankingCard">
           <div class="card-header">
             <div>
               <div class="card-title">Ranking de Recuperação</div>
@@ -1205,11 +1198,31 @@
 
     function updateDashboard(){
       const data = sortByTimestamp(getFilteredData());
+      const athlete = document.getElementById("athleteFilter").value;
+
+      const alertsCard = document.getElementById("alertsCard");
+      const rankingCard = document.getElementById("rankingCard");
+      const heatmapCard = document.getElementById("heatmapCard");
+      const kpiAlertsCard = document.getElementById("kpiAlertsCard");
 
       updateKPIs(data);
-      buildAlerts(data);
-      buildRanking(data);
-      buildHeatmap(data);
+
+      if(athlete === "Equipe"){
+        alertsCard.style.display = "block";
+        rankingCard.style.display = "block";
+        heatmapCard.style.display = "block";
+        kpiAlertsCard.style.display = "block";
+
+        buildAlerts(data);
+        buildRanking(data);
+        buildHeatmap(data);
+      } else {
+        alertsCard.style.display = "none";
+        rankingCard.style.display = "none";
+        heatmapCard.style.display = "none";
+        kpiAlertsCard.style.display = "none";
+        document.getElementById("kpiAlerts").innerText = "0";
+      }
 
       const labels = data.map(d => getDateLabel(d));
       const rec = data.map(d => safe(d["RECUPERAÇÃO"]));
