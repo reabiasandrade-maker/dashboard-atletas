@@ -496,7 +496,7 @@
     </div>
 
     <div class="top-grid">
-      <div class="kpi">
+      <div class="kpi" id="kpiAthletesCard">
         <div class="kpi-label">Atletas monitorados</div>
         <div class="kpi-value" id="kpiAthletes">0</div>
         <div class="kpi-sub">atletas no filtro atual</div>
@@ -1420,17 +1420,20 @@
 
       const heatmapCard = document.getElementById("heatmapCard");
       const kpiAlertsCard = document.getElementById("kpiAlertsCard");
+      const kpiAthletesCard = document.getElementById("kpiAthletesCard");
 
       updateKPIs(data);
 
       if(athlete === "Equipe"){
         heatmapCard.style.display = "block";
         kpiAlertsCard.style.display = "block";
+        kpiAthletesCard.style.display = "block";
         updateAlertsKPI(data);
         buildHeatmap(data);
       } else {
         heatmapCard.style.display = "none";
         kpiAlertsCard.style.display = "none";
+        kpiAthletesCard.style.display = "none";
         document.getElementById("kpiAlerts").innerText = "0";
         currentAlertsData = [];
       }
