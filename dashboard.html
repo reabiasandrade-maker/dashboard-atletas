@@ -89,7 +89,7 @@
 
     .top-grid{
       display:grid;
-      grid-template-columns:repeat(4,1fr);
+      grid-template-columns:repeat(2,1fr);
       gap:16px;
       margin-bottom:20px;
     }
@@ -225,48 +225,6 @@
       font-weight:600;
     }
 
-    .ranking-list{
-      display:grid;
-      gap:10px;
-    }
-
-    .rank-row{
-      display:grid;
-      grid-template-columns:42px 1fr 70px;
-      align-items:center;
-      gap:10px;
-      background:var(--panel-soft);
-      border:1px solid var(--border);
-      border-radius:14px;
-      padding:10px 12px;
-    }
-
-    .rank-pos{
-      width:32px;
-      height:32px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      border-radius:999px;
-      background:#e2e8f0;
-      font-weight:800;
-      font-size:13px;
-    }
-
-    .rank-name{
-      font-size:14px;
-      font-weight:600;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
-
-    .rank-score{
-      text-align:right;
-      font-size:14px;
-      font-weight:800;
-    }
-
     .heatmap{
       display:grid;
       gap:10px;
@@ -339,19 +297,13 @@
     #mbPhaseChart,
     #vo2Chart{height:320px !important;}
 
-    .footer-note{
-      margin-top:8px;
-      font-size:12px;
-      color:var(--muted);
-    }
-
     @media (max-width: 1250px){
       .layout{
         grid-template-columns:1fr;
       }
 
       .top-grid{
-        grid-template-columns:repeat(2,1fr);
+        grid-template-columns:1fr;
       }
 
       .charts-grid{
@@ -361,10 +313,6 @@
 
     @media (max-width: 760px){
       body{padding:16px}
-
-      .top-grid{
-        grid-template-columns:1fr;
-      }
 
       .mini-grid{
         grid-template-columns:1fr 1fr;
@@ -426,22 +374,10 @@
         <div class="kpi-sub">atletas no filtro atual</div>
       </div>
 
-      <div class="kpi">
-        <div class="kpi-label">Média de recuperação</div>
-        <div class="kpi-value" id="kpiRecovery">0.0</div>
-        <div class="kpi-sub">último registro de cada atleta</div>
-      </div>
-
       <div class="kpi" id="kpiAlertsCard">
         <div class="kpi-label">Atletas em alerta</div>
         <div class="kpi-value" id="kpiAlerts">0</div>
         <div class="kpi-sub">critérios de corte aplicados</div>
-      </div>
-
-      <div class="kpi">
-        <div class="kpi-label">Prontidão média</div>
-        <div class="kpi-value" id="kpiReadiness">0.0</div>
-        <div class="kpi-sub">média das variáveis subjetivas</div>
       </div>
     </div>
 
@@ -553,17 +489,6 @@
             <span><i class="dot" style="background:#fde68a"></i> Moderado</span>
             <span><i class="dot" style="background:#bbf7d0"></i> Adequado</span>
           </div>
-        </div>
-
-        <div class="card" id="rankingCard">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Ranking de Recuperação</div>
-              <div class="card-subtitle">Último registro por atleta</div>
-            </div>
-          </div>
-          <div class="ranking-list" id="ranking"></div>
-          <div class="footer-note">Ordenado da maior para a menor recuperação.</div>
         </div>
       </div>
     </div>
@@ -698,17 +623,6 @@
       });
 
       return result;
-    }
-
-    function readinessScore(row){
-      const vals = [
-        safe(row["RECUPERAÇÃO"]),
-        safe(row["SONO"]),
-        safe(row["FADIGA"]),
-        safe(row["ESTRESSE"]),
-        safe(row["DOR"])
-      ];
-      return mean(vals);
     }
 
     function getReadinessColor(v){
@@ -1069,34 +983,6 @@
       document.getElementById("kpiAlerts").innerText = count;
     }
 
-    function buildRanking(data){
-      const container = document.getElementById("ranking");
-      container.innerHTML = "";
-
-      const latestRows = getLatestRowByAthlete(data)
-        .map(r => ({
-          name: r["Nome"],
-          recovery: safe(r["RECUPERAÇÃO"])
-        }))
-        .sort((a,b) => b.recovery - a.recovery);
-
-      if(!latestRows.length){
-        container.innerHTML = `<div class="alert-empty">Sem dados para exibir ranking</div>`;
-        return;
-      }
-
-      latestRows.slice(0,10).forEach((item, idx) => {
-        const row = document.createElement("div");
-        row.className = "rank-row";
-        row.innerHTML = `
-          <div class="rank-pos">${idx + 1}</div>
-          <div class="rank-name">${item.name}</div>
-          <div class="rank-score">${item.recovery.toFixed(1)}</div>
-        `;
-        container.appendChild(row);
-      });
-    }
-
     function buildHeatmap(data){
       const container = document.getElementById("heatmap");
       container.innerHTML = "";
@@ -1140,13 +1026,7 @@
 
     function updateKPIs(data){
       const latestRows = getLatestRowByAthlete(data);
-      const athleteCount = latestRows.length;
-      const meanRecovery = mean(latestRows.map(r => safe(r["RECUPERAÇÃO"])));
-      const meanReadiness = mean(latestRows.map(r => readinessScore(r)));
-
-      document.getElementById("kpiAthletes").innerText = athleteCount;
-      document.getElementById("kpiRecovery").innerText = athleteCount ? meanRecovery.toFixed(1) : "0.0";
-      document.getElementById("kpiReadiness").innerText = athleteCount ? meanReadiness.toFixed(1) : "0.0";
+      document.getElementById("kpiAthletes").innerText = latestRows.length;
     }
 
     function updateAthleteSection(data){
@@ -1201,7 +1081,6 @@
       const athlete = document.getElementById("athleteFilter").value;
 
       const alertsCard = document.getElementById("alertsCard");
-      const rankingCard = document.getElementById("rankingCard");
       const heatmapCard = document.getElementById("heatmapCard");
       const kpiAlertsCard = document.getElementById("kpiAlertsCard");
 
@@ -1209,16 +1088,13 @@
 
       if(athlete === "Equipe"){
         alertsCard.style.display = "block";
-        rankingCard.style.display = "block";
         heatmapCard.style.display = "block";
         kpiAlertsCard.style.display = "block";
 
         buildAlerts(data);
-        buildRanking(data);
         buildHeatmap(data);
       } else {
         alertsCard.style.display = "none";
-        rankingCard.style.display = "none";
         heatmapCard.style.display = "none";
         kpiAlertsCard.style.display = "none";
         document.getElementById("kpiAlerts").innerText = "0";
