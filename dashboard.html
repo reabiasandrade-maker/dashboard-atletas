@@ -123,6 +123,7 @@
       margin-top:6px;
       font-size:12px;
       color:var(--muted);
+      min-height:16px;
     }
 
     .layout{
@@ -457,7 +458,6 @@
       <div class="kpi" id="kpiAthletesCard">
         <div class="kpi-label">Atletas monitorados</div>
         <div class="kpi-value" id="kpiAthletes">0</div>
-        <div class="kpi-sub">atletas com dados no filtro atual</div>
       </div>
 
       <div class="kpi clickable" id="kpiAlertsCard" title="Clique para ver os atletas em alerta">
@@ -472,8 +472,7 @@
         <div class="card">
           <div class="card-header">
             <div>
-              <div class="card-title">Wellness Diário + Carga de Treino</div>
-              <div class="card-subtitle">No modo equipe: média da manhã (treino 1) e média da tarde (treino 2) de cada dia</div>
+              <div class="card-title">Prontidão e Performance</div>
             </div>
             <div class="badge">Zona ideal: 7–10</div>
           </div>
@@ -565,8 +564,7 @@
         <div class="card" id="heatmapCard">
           <div class="card-header">
             <div>
-              <div class="card-title">Heatmap de Prontidão</div>
-              <div class="card-subtitle">Atletas com pelo menos um dado válido</div>
+              <div class="card-title">Prontidão</div>
             </div>
           </div>
 
@@ -816,7 +814,6 @@
       );
 
       const valores = [c1, c2, c3].filter(v => v !== null && !isNaN(v));
-
       if(valores.length) return valores.reduce((a,b)=>a+b,0) / valores.length;
       if(mediaDireta !== null) return mediaDireta;
       return 0;
@@ -853,7 +850,6 @@
       );
 
       const valores = [s1, s2, s3].filter(v => v !== null && !isNaN(v));
-
       if(valores.length) return valores.reduce((a,b)=>a+b,0) / valores.length;
       if(mediaDireta !== null) return mediaDireta;
       return 0;
