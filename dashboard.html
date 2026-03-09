@@ -21,7 +21,6 @@
       --green:#16a34a;
       --green-soft:#dcfce7;
       --yellow:#f59e0b;
-      --yellow-soft:#fef3c7;
       --red:#dc2626;
       --red-soft:#fee2e2;
       --blue:#2563eb;
@@ -41,10 +40,7 @@
       color:var(--text);
     }
 
-    .container{
-      max-width:1700px;
-      margin:auto;
-    }
+    .container{max-width:1700px;margin:auto}
 
     .header{
       display:flex;
@@ -104,17 +100,13 @@
 
     .kpi.clickable{
       cursor:pointer;
-      transition:transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
     }
 
     .kpi.clickable:hover{
       transform:translateY(-2px);
       box-shadow:0 14px 34px rgba(15,23,42,0.08);
       border-color:#cbd5e1;
-    }
-
-    .kpi.clickable:active{
-      transform:translateY(0);
     }
 
     .kpi-label{
@@ -327,9 +319,7 @@
       z-index:1000;
     }
 
-    .modal-overlay.show{
-      display:flex;
-    }
+    .modal-overlay.show{display:flex}
 
     .modal{
       width:min(760px, 100%);
@@ -372,10 +362,6 @@
       font-size:20px;
       cursor:pointer;
       font-weight:700;
-    }
-
-    .modal-close:hover{
-      background:#e2e8f0;
     }
 
     .modal-list{
@@ -425,48 +411,23 @@
     }
 
     @media (max-width: 1250px){
-      .layout{
-        grid-template-columns:1fr;
-      }
-
-      .top-grid{
-        grid-template-columns:1fr;
-      }
-
-      .charts-grid{
-        grid-template-columns:1fr;
-      }
+      .layout{grid-template-columns:1fr}
+      .top-grid{grid-template-columns:1fr}
+      .charts-grid{grid-template-columns:1fr}
     }
 
     @media (max-width: 760px){
       body{padding:16px}
-
-      .mini-grid{
-        grid-template-columns:1fr 1fr;
-      }
-
-      .filters{
-        width:100%;
-      }
-
-      select{
-        width:100%;
-      }
-
+      .mini-grid{grid-template-columns:1fr 1fr}
+      .filters{width:100%}
+      select{width:100%}
       .heat-header,
-      .heat-row{
-        grid-template-columns:1fr repeat(5, 38px);
-      }
-
-      canvas{
-        height:320px !important;
-      }
+      .heat-row{grid-template-columns:1fr repeat(5, 38px)}
+      canvas{height:320px !important}
     }
 
     @media (max-width: 540px){
-      .mini-grid{
-        grid-template-columns:1fr;
-      }
+      .mini-grid{grid-template-columns:1fr}
     }
   </style>
 </head>
@@ -555,7 +516,7 @@
             <div class="card-header">
               <div>
                 <div class="card-title">CMJ por Fase</div>
-                <div class="card-subtitle">Avaliação de cada fase de treino</div>
+                <div class="card-subtitle">Valores absolutos por fase</div>
               </div>
             </div>
             <canvas id="cmjPhaseChart"></canvas>
@@ -565,7 +526,7 @@
             <div class="card-header">
               <div>
                 <div class="card-title">Squat Jump por Fase</div>
-                <div class="card-subtitle">Avaliação de cada fase de treino</div>
+                <div class="card-subtitle">Valores absolutos por fase</div>
               </div>
             </div>
             <canvas id="sjPhaseChart"></canvas>
@@ -575,7 +536,7 @@
             <div class="card-header">
               <div>
                 <div class="card-title">Força Explosiva de Membros Superiores</div>
-                <div class="card-subtitle">Arremessos por fase de treino</div>
+                <div class="card-subtitle">Média dos arremessos da avaliação da fase</div>
               </div>
             </div>
             <canvas id="mbPhaseChart"></canvas>
@@ -585,7 +546,7 @@
             <div class="card-header">
               <div>
                 <div class="card-title">VO2max</div>
-                <div class="card-subtitle">Avaliações ao longo das fases</div>
+                <div class="card-subtitle">Valores absolutos por fase</div>
               </div>
             </div>
             <canvas id="vo2Chart"></canvas>
@@ -595,7 +556,7 @@
             <div class="card-header">
               <div>
                 <div class="card-title">Composição Corporal por Fase</div>
-                <div class="card-subtitle">1 avaliação por fase: peso, %G, massa gorda, massa magra e % massa magra</div>
+                <div class="card-subtitle">1 avaliação por fase, sem divisão dos valores</div>
               </div>
             </div>
             <canvas id="bodyCompChart"></canvas>
@@ -667,11 +628,6 @@
       if(v === null || v === undefined || v === "") return 0;
       const n = Number(String(v).replace(",", "."));
       return isNaN(n) ? 0 : n;
-    }
-
-    function mean(arr){
-      const valid = arr.filter(v => !isNaN(v));
-      return valid.length ? valid.reduce((a,b)=>a+b,0) / valid.length : 0;
     }
 
     function fmtMetric(v){
@@ -814,7 +770,9 @@
         row["VO₂MAX"] ||
         row["VO2"] ||
         row["VO2máx"] ||
-        row["VO2 MÁX"]
+        row["VO2 MÁX"] ||
+        row["VO2 Max"] ||
+        row["VO2max"]
       );
     }
 
@@ -842,8 +800,11 @@
       return safe(
         row["MASSA GORDA"] ||
         row["Massa gorda"] ||
+        row["Massa Gorda"] ||
         row["KG GORDURA"] ||
-        row["GORDURA KG"]
+        row["GORDURA KG"] ||
+        row["Massa gorda (kg)"] ||
+        row["Gordura (kg)"]
       );
     }
 
@@ -851,9 +812,12 @@
       return safe(
         row["MASSA MAGRA"] ||
         row["Massa magra"] ||
+        row["Massa Magra"] ||
         row["MM"] ||
         row["MASSA LIVRE DE GORDURA"] ||
-        row["MLG"]
+        row["MLG"] ||
+        row["Massa magra (kg)"] ||
+        row["Massa livre de gordura"]
       );
     }
 
@@ -862,8 +826,45 @@
         row["% MASSA MAGRA"] ||
         row["% DE MASSA MAGRA"] ||
         row["PERCENTUAL DE MASSA MAGRA"] ||
-        row["MASSA MAGRA %"]
+        row["MASSA MAGRA %"] ||
+        row["% Massa Magra"] ||
+        row["Percentual de massa magra"]
       );
+    }
+
+    function getArremesso(row){
+      const a1 = safe(
+        row["Arremesso Medicine Ball 1"] ||
+        row["Arremesso 1"] ||
+        row["Arremesso MB 1"]
+      );
+
+      const a2 = safe(
+        row["Arremesso Medicine Ball 2"] ||
+        row["Arremesso 2"] ||
+        row["Arremesso MB 2"]
+      );
+
+      const a3 = safe(
+        row["Arremesso Medicine Ball 3"] ||
+        row["Arremesso 3"] ||
+        row["Arremesso MB 3"]
+      );
+
+      const valores = [a1, a2, a3].filter(v => v > 0);
+
+      if(!valores.length) return 0;
+      return valores.reduce((a,b)=>a+b,0) / valores.length;
+    }
+
+    function getAbsolutePhaseValue(rows, getter){
+      const valores = rows
+        .map(r => getter(r))
+        .filter(v => !isNaN(v) && v > 0);
+
+      if(!valores.length) return 0;
+
+      return valores[valores.length - 1];
     }
 
     function baseChartOptions(yMin = 0, yMax = 10){
@@ -1362,7 +1363,7 @@
       if(latest){
         document.getElementById("cmjMetric").innerText = fmtMetric(latest["Média CMJ"]);
         document.getElementById("sjMetric").innerText = fmtMetric(latest["Média Squat Jump"]);
-        document.getElementById("mbMetric").innerText = fmtMetric(latest["Arremesso Medicine Ball 1"]);
+        document.getElementById("mbMetric").innerText = fmtMetric(getArremesso(latest));
         document.getElementById("vo2Metric").innerText = fmtMetric(getVO2(latest));
       }
 
@@ -1375,10 +1376,11 @@
 
       fases.forEach(f => {
         const rows = sorted.filter(r => r["Fase"] === f);
-        cmjPhase.push(mean(rows.map(r => safe(r["Média CMJ"]))));
-        sjPhase.push(mean(rows.map(r => safe(r["Média Squat Jump"]))));
-        mbPhase.push(mean(rows.map(r => safe(r["Arremesso Medicine Ball 1"]))));
-        vo2Phase.push(mean(rows.map(r => getVO2(r))));
+
+        cmjPhase.push(getAbsolutePhaseValue(rows, r => safe(r["Média CMJ"])));
+        sjPhase.push(getAbsolutePhaseValue(rows, r => safe(r["Média Squat Jump"])));
+        mbPhase.push(getAbsolutePhaseValue(rows, r => getArremesso(r)));
+        vo2Phase.push(getAbsolutePhaseValue(rows, r => getVO2(r)));
       });
 
       drawSinglePhaseBarChart("cmjPhaseChart", "cmjPhaseChart", "CMJ", fases, cmjPhase, "#0891b2");
@@ -1397,11 +1399,11 @@
       bodyPhaseLabels.forEach(f => {
         const rows = sorted.filter(r => r["Fase"] === f);
 
-        pesoPhase.push(mean(rows.map(r => getPeso(r))));
-        pctGPhase.push(mean(rows.map(r => getPctG(r))));
-        massaGordaPhase.push(mean(rows.map(r => getMassaGorda(r))));
-        massaMagraPhase.push(mean(rows.map(r => getMassaMagra(r))));
-        pctMassaMagraPhase.push(mean(rows.map(r => getPctMassaMagra(r))));
+        pesoPhase.push(getAbsolutePhaseValue(rows, r => getPeso(r)));
+        pctGPhase.push(getAbsolutePhaseValue(rows, r => getPctG(r)));
+        massaGordaPhase.push(getAbsolutePhaseValue(rows, r => getMassaGorda(r)));
+        massaMagraPhase.push(getAbsolutePhaseValue(rows, r => getMassaMagra(r)));
+        pctMassaMagraPhase.push(getAbsolutePhaseValue(rows, r => getPctMassaMagra(r)));
       });
 
       drawBodyCompChart(
