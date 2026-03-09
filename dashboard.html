@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://unpkg.com/jspdf@3.0.1/dist/jspdf.umd.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
   <style>
@@ -204,6 +205,30 @@
       color:var(--muted);
       margin-top:6px;
       font-weight:600;
+    }
+
+    .report-wrap{
+      margin-top:16px;
+      display:flex;
+      justify-content:flex-end;
+    }
+
+    .report-btn{
+      background:#2563eb;
+      color:#fff;
+      border:none;
+      padding:12px 18px;
+      border-radius:12px;
+      font-weight:700;
+      font-size:14px;
+      cursor:pointer;
+      box-shadow:0 8px 20px rgba(37,99,235,0.22);
+      transition:transform .15s ease, box-shadow .15s ease;
+    }
+
+    .report-btn:hover{
+      transform:translateY(-1px);
+      box-shadow:0 12px 24px rgba(37,99,235,0.28);
     }
 
     .heatmap{
@@ -426,6 +451,8 @@
 
     @media (max-width: 540px){
       .mini-grid{grid-template-columns:1fr}
+      .report-wrap{justify-content:stretch}
+      .report-btn{width:100%}
     }
   </style>
 </head>
@@ -504,6 +531,10 @@
               <div id="vo2Metric" class="metric-value">-</div>
               <div class="metric-label">VO2max</div>
             </div>
+          </div>
+
+          <div class="report-wrap">
+            <button id="pdfReportBtn" type="button" class="report-btn">Gerar relatório em PDF</button>
           </div>
         </div>
 
@@ -1634,6 +1665,176 @@
       select.value = currentExists ? current : "Equipe";
     }
 
+    function getAthleteTeamForPdf(athlete){
+      const allRows = [...monitoramentoData, ...desempenhoData, ...composicaoData];
+      const row = allRows.find(r => normalizeText(getName(r)) === normalizeText(athlete));
+      return row ? getTeamFromRowOrName(row) : "";
+    }
+
+    function addPdfLine(doc, text, x, y, options = {}){
+      const fontSize = options.fontSize || 11;
+      const maxWidth = options.maxWidth || 170;
+      const isBold = options.bold || false;
+
+      doc.setFont("helvetica", isBold ? "bold" : "normal");
+      doc.setFontSize(fontSize);
+
+      const lines = doc.splitTextToSize(String(text || ""), maxWidth);
+      doc.text(lines, x, y);
+
+      return y + (lines.length * (fontSize * 0.42)) + 3;
+    }
+
+    function addPdfSectionTitle(doc, title, y){
+      doc.setDrawColor(226,232,240);
+      doc.setLineWidth(0.5);
+      doc.line(14, y, 196, y);
+      y += 6;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text(title, 14, y);
+      return y + 6;
+    }
+
+    function buildAthletePhaseTable(data, metricGetter){
+      const athlete = document.getElementById("athleteFilter").value;
+      const athleteRows = sortByTimestamp(
+        data.filter(r => normalizeText(getName(r)) === normalizeText(athlete))
+      );
+
+      const fases = [...new Set(athleteRows.map(d => getPhase(d)).filter(Boolean))];
+      return fases.map(fase => {
+        const rows = athleteRows.filter(r => getPhase(r) === fase);
+        return {
+          fase,
+          valor: getAbsolutePhaseValue(rows, metricGetter)
+        };
+      });
+    }
+
+    function gerarRelatorioPDF(){
+      const athlete = document.getElementById("athleteFilter").value;
+      if(!athlete || athlete === "Equipe"){
+        alert("Selecione um atleta para gerar o relatório.");
+        return;
+      }
+
+      if(!window.jspdf){
+        alert("Biblioteca de PDF não carregada.");
+        return;
+      }
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
+
+      const monitorRows = sortByTimestamp(
+        monitoramentoData.filter(r => normalizeText(getName(r)) === normalizeText(athlete))
+      );
+      const desempenhoRows = sortByTimestamp(
+        desempenhoData.filter(r => normalizeText(getName(r)) === normalizeText(athlete))
+      );
+      const composicaoRows = sortByTimestamp(
+        composicaoData.filter(r => normalizeText(getName(r)) === normalizeText(athlete))
+      );
+
+      const latestMonitor = monitorRows.length ? monitorRows[monitorRows.length - 1] : null;
+      const latestDesempenho = desempenhoRows.length ? desempenhoRows[desempenhoRows.length - 1] : null;
+      const latestComposicao = composicaoRows.length ? composicaoRows[composicaoRows.length - 1] : null;
+      const team = getAthleteTeamForPdf(athlete);
+
+      let y = 18;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Smart Training PRO", 14, y);
+      y += 7;
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.text("Relatório individual do atleta", 14, y);
+      y += 10;
+
+      y = addPdfLine(doc, `Atleta: ${athlete}`, 14, y, { bold: true });
+      y = addPdfLine(doc, `Equipe: ${team || "-"}`, 14, y);
+      y = addPdfLine(doc, `Gerado em: ${new Date().toLocaleString("pt-BR")}`, 14, y);
+      y += 4;
+
+      y = addPdfSectionTitle(doc, "Últimos indicadores de desempenho", y);
+      y = addPdfLine(doc, `CMJ: ${latestDesempenho ? fmtMetric(getCMJ(latestDesempenho)) : "-"}`, 14, y);
+      y = addPdfLine(doc, `Squat Jump: ${latestDesempenho ? fmtMetric(getSquatJump(latestDesempenho)) : "-"}`, 14, y);
+      y = addPdfLine(doc, `Arremesso: ${latestDesempenho ? fmtMetric(getArremesso(latestDesempenho)) : "-"}`, 14, y);
+      y = addPdfLine(doc, `VO2max: ${latestDesempenho ? fmtMetric(getVO2(latestDesempenho)) : "-"}`, 14, y);
+      y += 4;
+
+      y = addPdfSectionTitle(doc, "Últimos indicadores de prontidão", y);
+      y = addPdfLine(doc, `Recuperação: ${latestMonitor ? (safeNullable(latestMonitor["RECUPERAÇÃO"]) ?? "-") : "-"}`, 14, y);
+      y = addPdfLine(doc, `Sono: ${latestMonitor ? (safeNullable(latestMonitor["SONO"]) ?? "-") : "-"}`, 14, y);
+      y = addPdfLine(doc, `Fadiga: ${latestMonitor ? (safeNullable(latestMonitor["FADIGA"]) ?? "-") : "-"}`, 14, y);
+      y = addPdfLine(doc, `Estresse: ${latestMonitor ? (safeNullable(latestMonitor["ESTRESSE"]) ?? "-") : "-"}`, 14, y);
+      y = addPdfLine(doc, `Dor: ${latestMonitor ? (safeNullable(latestMonitor["DOR"]) ?? "-") : "-"}`, 14, y);
+      y = addPdfLine(doc, `Esforço: ${latestMonitor ? (safeNullable(latestMonitor["ESFORÇO"]) ?? "-") : "-"}`, 14, y);
+      y = addPdfLine(doc, `Carga de treino: ${latestMonitor ? (getTrainingLoad(latestMonitor) ?? "-") : "-"}`, 14, y);
+      y += 4;
+
+      y = addPdfSectionTitle(doc, "Última composição corporal", y);
+      y = addPdfLine(doc, `Peso: ${latestComposicao ? fmtMetric(getPeso(latestComposicao)) : "-"}`, 14, y);
+      y = addPdfLine(doc, `% Gordura: ${latestComposicao ? fmtMetric(getPctG(latestComposicao)) : "-"}`, 14, y);
+      y = addPdfLine(doc, `Massa gorda: ${latestComposicao ? fmtMetric(getMassaGorda(latestComposicao)) : "-"}`, 14, y);
+      y = addPdfLine(doc, `Massa magra: ${latestComposicao ? fmtMetric(getMassaMagra(latestComposicao)) : "-"}`, 14, y);
+      y = addPdfLine(doc, `% Massa magra: ${latestComposicao ? fmtMetric(getPctMassaMagra(latestComposicao)) : "-"}`, 14, y);
+
+      doc.addPage();
+      y = 18;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("Evolução por fase", 14, y);
+      y += 10;
+
+      const cmjTable = buildAthletePhaseTable(desempenhoData, r => getCMJ(r));
+      const sjTable = buildAthletePhaseTable(desempenhoData, r => getSquatJump(r));
+      const mbTable = buildAthletePhaseTable(desempenhoData, r => getArremesso(r));
+      const vo2Table = buildAthletePhaseTable(desempenhoData, r => getVO2(r));
+      const pesoTable = buildAthletePhaseTable(composicaoData, r => getPeso(r));
+      const pctGTable = buildAthletePhaseTable(composicaoData, r => getPctG(r));
+
+      const fases = [...new Set([
+        ...cmjTable.map(i => i.fase),
+        ...sjTable.map(i => i.fase),
+        ...mbTable.map(i => i.fase),
+        ...vo2Table.map(i => i.fase),
+        ...pesoTable.map(i => i.fase),
+        ...pctGTable.map(i => i.fase)
+      ])];
+
+      fases.forEach(fase => {
+        if (y > 265) {
+          doc.addPage();
+          y = 18;
+        }
+
+        y = addPdfSectionTitle(doc, `Fase ${fase}`, y);
+
+        const cmj = cmjTable.find(i => i.fase === fase)?.valor ?? 0;
+        const sj = sjTable.find(i => i.fase === fase)?.valor ?? 0;
+        const mb = mbTable.find(i => i.fase === fase)?.valor ?? 0;
+        const vo2 = vo2Table.find(i => i.fase === fase)?.valor ?? 0;
+        const peso = pesoTable.find(i => i.fase === fase)?.valor ?? 0;
+        const pctg = pctGTable.find(i => i.fase === fase)?.valor ?? 0;
+
+        y = addPdfLine(doc, `CMJ: ${cmj ? cmj.toFixed(2) : "-"}`, 14, y);
+        y = addPdfLine(doc, `Squat Jump: ${sj ? sj.toFixed(2) : "-"}`, 14, y);
+        y = addPdfLine(doc, `Arremesso: ${mb ? mb.toFixed(2) : "-"}`, 14, y);
+        y = addPdfLine(doc, `VO2max: ${vo2 ? vo2.toFixed(2) : "-"}`, 14, y);
+        y = addPdfLine(doc, `Peso: ${peso ? peso.toFixed(2) : "-"}`, 14, y);
+        y = addPdfLine(doc, `% Gordura: ${pctg ? pctg.toFixed(2) : "-"}`, 14, y);
+        y += 4;
+      });
+
+      const fileName = `Relatorio_${athlete.replace(/\s+/g, "_")}.pdf`;
+      doc.save(fileName);
+    }
+
     function attachEvents(){
       document.getElementById("teamFilter").addEventListener("change", () => {
         populateAthletesByTeam();
@@ -1661,6 +1862,11 @@
           closeAlertsModal();
         }
       });
+
+      const pdfBtn = document.getElementById("pdfReportBtn");
+      if (pdfBtn) {
+        pdfBtn.addEventListener("click", gerarRelatorioPDF);
+      }
     }
 
     function parseCsv(url){
