@@ -24,6 +24,8 @@
       --red:#dc2626;
       --blue:#2563eb;
       --purple:#7c3aed;
+      --cyan:#0891b2;
+      --navy:#0f172a;
       --shadow:0 10px 30px rgba(15,23,42,0.06);
       --radius:18px;
     }
@@ -214,7 +216,7 @@
     }
 
     .report-btn{
-      background:#2563eb;
+      background:linear-gradient(135deg, var(--blue), var(--cyan));
       color:#fff;
       border:none;
       padding:12px 18px;
@@ -652,6 +654,20 @@
     let composicaoData = [];
     let charts = {};
     let currentAlertsData = [];
+
+    const PDF_THEME = {
+      navy: [15, 23, 42],
+      blue: [37, 99, 235],
+      cyan: [8, 145, 178],
+      green: [22, 163, 74],
+      orange: [245, 158, 11],
+      red: [220, 38, 38],
+      purple: [124, 58, 237],
+      slate: [100, 116, 139],
+      soft: [241, 245, 249],
+      border: [226, 232, 240],
+      white: [255, 255, 255]
+    };
 
     function safe(v){
       if(v === null || v === undefined || String(v).trim() === "") return 0;
@@ -1671,29 +1687,155 @@
       return row ? getTeamFromRowOrName(row) : "";
     }
 
-    function addPdfLine(doc, text, x, y, options = {}){
-      const fontSize = options.fontSize || 11;
-      const maxWidth = options.maxWidth || 170;
-      const isBold = options.bold || false;
-
-      doc.setFont("helvetica", isBold ? "bold" : "normal");
-      doc.setFontSize(fontSize);
-
-      const lines = doc.splitTextToSize(String(text || ""), maxWidth);
-      doc.text(lines, x, y);
-
-      return y + (lines.length * (fontSize * 0.42)) + 3;
+    function formatPdfValue(value, decimals = 2){
+      if(value === null || value === undefined || value === "" || isNaN(value)) return "-";
+      const n = Number(value);
+      if(!isFinite(n) || n === 0) return "-";
+      return n.toFixed(decimals).replace(".", ",");
     }
 
-    function addPdfSectionTitle(doc, title, y){
-      doc.setDrawColor(226,232,240);
-      doc.setLineWidth(0.5);
-      doc.line(14, y, 196, y);
-      y += 6;
+    function pdfSetFill(doc, color){
+      doc.setFillColor(color[0], color[1], color[2]);
+    }
+
+    function pdfSetText(doc, color){
+      doc.setTextColor(color[0], color[1], color[2]);
+    }
+
+    function pdfSetDraw(doc, color){
+      doc.setDrawColor(color[0], color[1], color[2]);
+    }
+
+    function addPdfPageFooter(doc){
+      const pageCount = doc.getNumberOfPages();
+      for(let i = 1; i <= pageCount; i++){
+        doc.setPage(i);
+        pdfSetDraw(doc, PDF_THEME.border);
+        doc.setLineWidth(0.4);
+        doc.line(14, 287, 196, 287);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        pdfSetText(doc, PDF_THEME.slate);
+        doc.text("Smart Training PRO", 14, 292);
+        doc.text(`Página ${i} de ${pageCount}`, 182, 292, { align: "right" });
+      }
+    }
+
+    function ensurePdfSpace(doc, y, needed = 20){
+      if(y + needed > 280){
+        doc.addPage();
+        return 18;
+      }
+      return y;
+    }
+
+    function addPdfHeaderBand(doc, athlete, team){
+      pdfSetFill(doc, PDF_THEME.navy);
+      doc.rect(0, 0, 210, 38, "F");
+
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.text(title, 14, y);
-      return y + 6;
+      doc.setFontSize(20);
+      pdfSetText(doc, PDF_THEME.white);
+      doc.text("Smart Training PRO", 14, 16);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.text("Relatório individual de prontidão e performance", 14, 24);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text(athlete || "-", 14, 33);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(`Equipe: ${team || "-"}`, 85, 33);
+      doc.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 196, 33, { align: "right" });
+    }
+
+    function addPdfSectionTitle(doc, title, y, color = PDF_THEME.blue){
+      y = ensurePdfSpace(doc, y, 16);
+
+      pdfSetFill(doc, color);
+      doc.roundedRect(14, y, 182, 10, 3, 3, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      pdfSetText(doc, PDF_THEME.white);
+      doc.text(title, 18, y + 6.6);
+
+      return y + 16;
+    }
+
+    function addPdfInfoCard(doc, x, y, w, h, title, value, accent = PDF_THEME.blue){
+      pdfSetFill(doc, PDF_THEME.soft);
+      pdfSetDraw(doc, PDF_THEME.border);
+      doc.roundedRect(x, y, w, h, 4, 4, "FD");
+
+      pdfSetFill(doc, accent);
+      doc.roundedRect(x, y, 4, h, 4, 4, "F");
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      pdfSetText(doc, PDF_THEME.slate);
+      doc.text(title, x + 8, y + 8);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      pdfSetText(doc, PDF_THEME.navy);
+      doc.text(String(value), x + 8, y + 17);
+    }
+
+    function addPdfMetricLine(doc, label, value, x, y, color = PDF_THEME.navy){
+      pdfSetText(doc, PDF_THEME.slate);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.text(label, x, y);
+
+      pdfSetText(doc, color);
+      doc.setFont("helvetica", "bold");
+      doc.text(String(value), x + 58, y);
+
+      return y + 7;
+    }
+
+    function captureChartImage(chartName){
+      const chart = charts[chartName];
+      if(!chart || !chart.canvas) return null;
+
+      try{
+        return chart.canvas.toDataURL("image/png", 1.0);
+      }catch(e){
+        console.error(`Erro ao capturar gráfico ${chartName}:`, e);
+        return null;
+      }
+    }
+
+    function addPdfChartBlock(doc, title, chartName, y, options = {}){
+      const imageData = captureChartImage(chartName);
+      if(!imageData) return y;
+
+      const blockHeight = options.height || 78;
+      const imageHeight = options.imageHeight || 58;
+      const titleColor = options.titleColor || PDF_THEME.cyan;
+
+      y = ensurePdfSpace(doc, y, blockHeight + 8);
+
+      pdfSetFill(doc, PDF_THEME.white);
+      pdfSetDraw(doc, PDF_THEME.border);
+      doc.roundedRect(14, y, 182, blockHeight, 5, 5, "FD");
+
+      pdfSetFill(doc, titleColor);
+      doc.roundedRect(14, y, 182, 10, 5, 5, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      pdfSetText(doc, PDF_THEME.white);
+      doc.text(title, 18, y + 6.5);
+
+      doc.addImage(imageData, "PNG", 20, y + 14, 170, imageHeight, "", "FAST");
+
+      return y + blockHeight + 8;
     }
 
     function buildAthletePhaseTable(data, metricGetter){
@@ -1703,6 +1845,7 @@
       );
 
       const fases = [...new Set(athleteRows.map(d => getPhase(d)).filter(Boolean))];
+
       return fases.map(fase => {
         const rows = athleteRows.filter(r => getPhase(r) === fase);
         return {
@@ -1712,8 +1855,46 @@
       });
     }
 
+    function addPdfSimpleTable(doc, title, rows, y){
+      if(!rows.length) return y;
+
+      y = addPdfSectionTitle(doc, title, y, PDF_THEME.purple);
+
+      pdfSetFill(doc, PDF_THEME.soft);
+      pdfSetDraw(doc, PDF_THEME.border);
+      doc.roundedRect(14, y - 2, 182, 10, 3, 3, "FD");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      pdfSetText(doc, PDF_THEME.navy);
+      doc.text("Fase", 20, y + 4.5);
+      doc.text("Valor", 150, y + 4.5);
+
+      y += 12;
+
+      rows.forEach((row, idx) => {
+        y = ensurePdfSpace(doc, y, 8);
+
+        if(idx % 2 === 0){
+          pdfSetFill(doc, PDF_THEME.soft);
+          doc.roundedRect(14, y - 4.5, 182, 8, 2, 2, "F");
+        }
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        pdfSetText(doc, PDF_THEME.navy);
+        doc.text(String(row.fase), 20, y);
+        doc.text(formatPdfValue(row.valor), 150, y);
+
+        y += 8;
+      });
+
+      return y + 4;
+    }
+
     function gerarRelatorioPDF(){
       const athlete = document.getElementById("athleteFilter").value;
+
       if(!athlete || athlete === "Equipe"){
         alert("Selecione um atleta para gerar o relatório.");
         return;
@@ -1742,54 +1923,57 @@
       const latestComposicao = composicaoRows.length ? composicaoRows[composicaoRows.length - 1] : null;
       const team = getAthleteTeamForPdf(athlete);
 
-      let y = 18;
+      addPdfHeaderBand(doc, athlete, team);
 
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(18);
-      doc.text("Smart Training PRO", 14, y);
-      y += 7;
+      let y = 48;
 
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(11);
-      doc.text("Relatório individual do atleta", 14, y);
-      y += 10;
+      addPdfInfoCard(doc, 14, y, 42, 24, "CMJ", latestDesempenho ? formatPdfValue(getCMJ(latestDesempenho)) : "-", PDF_THEME.cyan);
+      addPdfInfoCard(doc, 60, y, 42, 24, "Squat Jump", latestDesempenho ? formatPdfValue(getSquatJump(latestDesempenho)) : "-", PDF_THEME.blue);
+      addPdfInfoCard(doc, 106, y, 42, 24, "Arremesso", latestDesempenho ? formatPdfValue(getArremesso(latestDesempenho)) : "-", PDF_THEME.purple);
+      addPdfInfoCard(doc, 152, y, 44, 24, "VO2max", latestDesempenho ? formatPdfValue(getVO2(latestDesempenho)) : "-", PDF_THEME.green);
 
-      y = addPdfLine(doc, `Atleta: ${athlete}`, 14, y, { bold: true });
-      y = addPdfLine(doc, `Equipe: ${team || "-"}`, 14, y);
-      y = addPdfLine(doc, `Gerado em: ${new Date().toLocaleString("pt-BR")}`, 14, y);
+      y += 34;
+      y = addPdfSectionTitle(doc, "Resumo executivo", y, PDF_THEME.blue);
+
+      y = addPdfMetricLine(doc, "Recuperação", latestMonitor ? (safeNullable(latestMonitor["RECUPERAÇÃO"]) ?? "-") : "-", 18, y, PDF_THEME.green);
+      y = addPdfMetricLine(doc, "Sono", latestMonitor ? (safeNullable(latestMonitor["SONO"]) ?? "-") : "-", 18, y, PDF_THEME.blue);
+      y = addPdfMetricLine(doc, "Fadiga", latestMonitor ? (safeNullable(latestMonitor["FADIGA"]) ?? "-") : "-", 18, y, PDF_THEME.orange);
+      y = addPdfMetricLine(doc, "Estresse", latestMonitor ? (safeNullable(latestMonitor["ESTRESSE"]) ?? "-") : "-", 18, y, PDF_THEME.red);
+      y = addPdfMetricLine(doc, "Dor", latestMonitor ? (safeNullable(latestMonitor["DOR"]) ?? "-") : "-", 18, y, PDF_THEME.purple);
+      y = addPdfMetricLine(doc, "Carga de treino", latestMonitor ? (getTrainingLoad(latestMonitor) ?? "-") : "-", 18, y, PDF_THEME.navy);
+
       y += 4;
+      y = addPdfSectionTitle(doc, "Composição corporal", y, PDF_THEME.cyan);
 
-      y = addPdfSectionTitle(doc, "Últimos indicadores de desempenho", y);
-      y = addPdfLine(doc, `CMJ: ${latestDesempenho ? fmtMetric(getCMJ(latestDesempenho)) : "-"}`, 14, y);
-      y = addPdfLine(doc, `Squat Jump: ${latestDesempenho ? fmtMetric(getSquatJump(latestDesempenho)) : "-"}`, 14, y);
-      y = addPdfLine(doc, `Arremesso: ${latestDesempenho ? fmtMetric(getArremesso(latestDesempenho)) : "-"}`, 14, y);
-      y = addPdfLine(doc, `VO2max: ${latestDesempenho ? fmtMetric(getVO2(latestDesempenho)) : "-"}`, 14, y);
-      y += 4;
-
-      y = addPdfSectionTitle(doc, "Últimos indicadores de prontidão", y);
-      y = addPdfLine(doc, `Recuperação: ${latestMonitor ? (safeNullable(latestMonitor["RECUPERAÇÃO"]) ?? "-") : "-"}`, 14, y);
-      y = addPdfLine(doc, `Sono: ${latestMonitor ? (safeNullable(latestMonitor["SONO"]) ?? "-") : "-"}`, 14, y);
-      y = addPdfLine(doc, `Fadiga: ${latestMonitor ? (safeNullable(latestMonitor["FADIGA"]) ?? "-") : "-"}`, 14, y);
-      y = addPdfLine(doc, `Estresse: ${latestMonitor ? (safeNullable(latestMonitor["ESTRESSE"]) ?? "-") : "-"}`, 14, y);
-      y = addPdfLine(doc, `Dor: ${latestMonitor ? (safeNullable(latestMonitor["DOR"]) ?? "-") : "-"}`, 14, y);
-      y = addPdfLine(doc, `Esforço: ${latestMonitor ? (safeNullable(latestMonitor["ESFORÇO"]) ?? "-") : "-"}`, 14, y);
-      y = addPdfLine(doc, `Carga de treino: ${latestMonitor ? (getTrainingLoad(latestMonitor) ?? "-") : "-"}`, 14, y);
-      y += 4;
-
-      y = addPdfSectionTitle(doc, "Última composição corporal", y);
-      y = addPdfLine(doc, `Peso: ${latestComposicao ? fmtMetric(getPeso(latestComposicao)) : "-"}`, 14, y);
-      y = addPdfLine(doc, `% Gordura: ${latestComposicao ? fmtMetric(getPctG(latestComposicao)) : "-"}`, 14, y);
-      y = addPdfLine(doc, `Massa gorda: ${latestComposicao ? fmtMetric(getMassaGorda(latestComposicao)) : "-"}`, 14, y);
-      y = addPdfLine(doc, `Massa magra: ${latestComposicao ? fmtMetric(getMassaMagra(latestComposicao)) : "-"}`, 14, y);
-      y = addPdfLine(doc, `% Massa magra: ${latestComposicao ? fmtMetric(getPctMassaMagra(latestComposicao)) : "-"}`, 14, y);
+      y = addPdfMetricLine(doc, "Peso", latestComposicao ? formatPdfValue(getPeso(latestComposicao)) : "-", 18, y, PDF_THEME.navy);
+      y = addPdfMetricLine(doc, "% Gordura", latestComposicao ? formatPdfValue(getPctG(latestComposicao)) : "-", 18, y, PDF_THEME.red);
+      y = addPdfMetricLine(doc, "Massa gorda", latestComposicao ? formatPdfValue(getMassaGorda(latestComposicao)) : "-", 18, y, PDF_THEME.orange);
+      y = addPdfMetricLine(doc, "Massa magra", latestComposicao ? formatPdfValue(getMassaMagra(latestComposicao)) : "-", 18, y, PDF_THEME.blue);
+      y = addPdfMetricLine(doc, "% Massa magra", latestComposicao ? formatPdfValue(getPctMassaMagra(latestComposicao)) : "-", 18, y, PDF_THEME.green);
 
       doc.addPage();
       y = 18;
 
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(16);
-      doc.text("Evolução por fase", 14, y);
-      y += 10;
+      y = addPdfSectionTitle(doc, "Gráficos de prontidão e performance", y, PDF_THEME.navy);
+      y = addPdfChartBlock(doc, "Prontidão e Performance", "wellnessChart", y, { height: 92, imageHeight: 70, titleColor: PDF_THEME.blue });
+
+      doc.addPage();
+      y = 18;
+
+      y = addPdfSectionTitle(doc, "Desempenho por fase", y, PDF_THEME.cyan);
+      y = addPdfChartBlock(doc, "CMJ por Fase", "cmjPhaseChart", y, { titleColor: PDF_THEME.cyan });
+      y = addPdfChartBlock(doc, "Squat Jump por Fase", "sjPhaseChart", y, { titleColor: PDF_THEME.blue });
+      y = addPdfChartBlock(doc, "Arremesso por Fase", "mbPhaseChart", y, { titleColor: PDF_THEME.purple });
+
+      doc.addPage();
+      y = 18;
+
+      y = addPdfSectionTitle(doc, "Capacidade aeróbia e composição corporal", y, PDF_THEME.green);
+      y = addPdfChartBlock(doc, "VO2max por Fase", "vo2Chart", y, { titleColor: PDF_THEME.green });
+      y = addPdfChartBlock(doc, "Composição Corporal por Fase", "bodyCompChart", y, { height: 88, imageHeight: 66, titleColor: PDF_THEME.orange });
+
+      doc.addPage();
+      y = 18;
 
       const cmjTable = buildAthletePhaseTable(desempenhoData, r => getCMJ(r));
       const sjTable = buildAthletePhaseTable(desempenhoData, r => getSquatJump(r));
@@ -1798,40 +1982,22 @@
       const pesoTable = buildAthletePhaseTable(composicaoData, r => getPeso(r));
       const pctGTable = buildAthletePhaseTable(composicaoData, r => getPctG(r));
 
-      const fases = [...new Set([
-        ...cmjTable.map(i => i.fase),
-        ...sjTable.map(i => i.fase),
-        ...mbTable.map(i => i.fase),
-        ...vo2Table.map(i => i.fase),
-        ...pesoTable.map(i => i.fase),
-        ...pctGTable.map(i => i.fase)
-      ])];
+      y = addPdfSimpleTable(doc, "Tabela de evolução - CMJ", cmjTable, y);
+      y = addPdfSimpleTable(doc, "Tabela de evolução - Squat Jump", sjTable, y);
 
-      fases.forEach(fase => {
-        if (y > 265) {
-          doc.addPage();
-          y = 18;
-        }
+      doc.addPage();
+      y = 18;
+      y = addPdfSimpleTable(doc, "Tabela de evolução - Arremesso", mbTable, y);
+      y = addPdfSimpleTable(doc, "Tabela de evolução - VO2max", vo2Table, y);
 
-        y = addPdfSectionTitle(doc, `Fase ${fase}`, y);
+      doc.addPage();
+      y = 18;
+      y = addPdfSimpleTable(doc, "Tabela de evolução - Peso", pesoTable, y);
+      y = addPdfSimpleTable(doc, "Tabela de evolução - % Gordura", pctGTable, y);
 
-        const cmj = cmjTable.find(i => i.fase === fase)?.valor ?? 0;
-        const sj = sjTable.find(i => i.fase === fase)?.valor ?? 0;
-        const mb = mbTable.find(i => i.fase === fase)?.valor ?? 0;
-        const vo2 = vo2Table.find(i => i.fase === fase)?.valor ?? 0;
-        const peso = pesoTable.find(i => i.fase === fase)?.valor ?? 0;
-        const pctg = pctGTable.find(i => i.fase === fase)?.valor ?? 0;
+      addPdfPageFooter(doc);
 
-        y = addPdfLine(doc, `CMJ: ${cmj ? cmj.toFixed(2) : "-"}`, 14, y);
-        y = addPdfLine(doc, `Squat Jump: ${sj ? sj.toFixed(2) : "-"}`, 14, y);
-        y = addPdfLine(doc, `Arremesso: ${mb ? mb.toFixed(2) : "-"}`, 14, y);
-        y = addPdfLine(doc, `VO2max: ${vo2 ? vo2.toFixed(2) : "-"}`, 14, y);
-        y = addPdfLine(doc, `Peso: ${peso ? peso.toFixed(2) : "-"}`, 14, y);
-        y = addPdfLine(doc, `% Gordura: ${pctg ? pctg.toFixed(2) : "-"}`, 14, y);
-        y += 4;
-      });
-
-      const fileName = `Relatorio_${athlete.replace(/\s+/g, "_")}.pdf`;
+      const fileName = `Relatorio_Profissional_${athlete.replace(/\s+/g, "_")}.pdf`;
       doc.save(fileName);
     }
 
@@ -1864,7 +2030,7 @@
       });
 
       const pdfBtn = document.getElementById("pdfReportBtn");
-      if (pdfBtn) {
+      if(pdfBtn){
         pdfBtn.addEventListener("click", gerarRelatorioPDF);
       }
     }
