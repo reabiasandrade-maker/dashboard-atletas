@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Training PRO</title>
+  <title>Smart Training</title>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
@@ -460,7 +460,7 @@
       <div class="kpi" id="kpiAthletesCard">
         <div class="kpi-label">Atletas monitorados</div>
         <div class="kpi-value" id="kpiAthletes">0</div>
-        <div class="kpi-sub">atletas no filtro atual</div>
+        <div class="kpi-sub">atletas com dados no filtro atual</div>
       </div>
 
       <div class="kpi clickable" id="kpiAlertsCard" title="Clique para ver os atletas em alerta">
@@ -748,6 +748,21 @@
       });
 
       return result;
+    }
+
+    function getHeatmapEligibleRows(data){
+      const latestRows = getLatestRowByAthlete(data);
+
+      return latestRows.filter(row => {
+        const vals = [
+          safeNullable(row["RECUPERAÇÃO"]),
+          safeNullable(row["SONO"]),
+          safeNullable(row["FADIGA"]),
+          safeNullable(row["ESTRESSE"]),
+          safeNullable(row["DOR"])
+        ];
+        return vals.some(v => v !== null);
+      });
     }
 
     function getReadinessColor(v){
@@ -1308,14 +1323,14 @@
       const container = document.getElementById("heatmap");
       container.innerHTML = "";
 
-      const latestRows = getLatestRowByAthlete(data);
+      const eligibleRows = getHeatmapEligibleRows(data);
 
-      if(!latestRows.length){
+      if(!eligibleRows.length){
         container.innerHTML = `<div class="modal-empty">Sem dados para exibir heatmap</div>`;
         return;
       }
 
-      latestRows.forEach(row => {
+      eligibleRows.forEach(row => {
         const metrics = [
           {label:"R", value:safeNullable(row["RECUPERAÇÃO"])},
           {label:"S", value:safeNullable(row["SONO"])},
@@ -1356,8 +1371,8 @@
     }
 
     function updateKPIs(data){
-      const latestRows = getLatestRowByAthlete(data);
-      document.getElementById("kpiAthletes").innerText = latestRows.length;
+      const eligibleRows = getHeatmapEligibleRows(data);
+      document.getElementById("kpiAthletes").innerText = eligibleRows.length;
     }
 
     function updateAthleteSection(data){
