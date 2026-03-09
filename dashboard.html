@@ -476,7 +476,7 @@
           <div class="card-header">
             <div>
               <div class="card-title">Wellness Diário + Carga de Treino</div>
-              <div class="card-subtitle">Linha para wellness e barras para carga interna (Esforço × Tempo)</div>
+              <div class="card-subtitle">No modo equipe: média da manhã (treino 1) e média da tarde (treino 2) de cada dia</div>
             </div>
             <div class="badge">Zona ideal: 7–10</div>
           </div>
@@ -569,7 +569,7 @@
           <div class="card-header">
             <div>
               <div class="card-title">Heatmap de Prontidão</div>
-              <div class="card-subtitle">Último registro válido de cada atleta</div>
+              <div class="card-subtitle">Atletas com pelo menos um dado válido</div>
             </div>
           </div>
 
@@ -641,6 +641,12 @@
       return n ? n.toFixed(2) : "-";
     }
 
+    function averageOrNull(arr){
+      const valid = arr.filter(v => v !== null && v !== undefined && !isNaN(v));
+      if(!valid.length) return null;
+      return valid.reduce((a,b)=>a+b,0) / valid.length;
+    }
+
     function getTeam(name){
       if(!name) return "";
       const parts = String(name).trim().split(" ");
@@ -680,10 +686,39 @@
     }
 
     function getShiftLabel(row){
-      const raw = String(row["Turno"] || row["Fase"] || "").trim().toLowerCase();
+      const raw = String(
+        row["Turno"] ||
+        row["TREINO"] ||
+        row["Treino"] ||
+        row["treino"] ||
+        row["Fase"] ||
+        ""
+      ).trim().toLowerCase();
 
-      if(raw === "1" || raw === "turno 1" || raw === "fase 1" || raw.includes("1")) return "Manhã";
-      if(raw === "2" || raw === "turno 2" || raw === "fase 2" || raw.includes("2")) return "Tarde";
+      if(
+        raw === "1" ||
+        raw === "turno 1" ||
+        raw === "treino 1" ||
+        raw === "fase 1" ||
+        raw.includes("treino 1") ||
+        raw.includes("turno 1") ||
+        raw === "manhã" ||
+        raw === "manha"
+      ){
+        return "Manhã";
+      }
+
+      if(
+        raw === "2" ||
+        raw === "turno 2" ||
+        raw === "treino 2" ||
+        raw === "fase 2" ||
+        raw.includes("treino 2") ||
+        raw.includes("turno 2") ||
+        raw === "tarde"
+      ){
+        return "Tarde";
+      }
 
       return raw ? raw : "";
     }
@@ -1450,6 +1485,71 @@
       );
     }
 
+    function buildTeamWellnessSeries(data){
+      const grouped = {};
+
+      data.forEach(row => {
+        const rawDate = row["Carimbo de data/hora"] || "";
+        const onlyDate = rawDate.split(" ")[0] || "";
+        const shift = getShiftLabel(row);
+
+        if(!onlyDate || !shift) return;
+
+        const key = `${onlyDate}__${shift}`;
+
+        if(!grouped[key]){
+          grouped[key] = {
+            date: onlyDate,
+            shift: shift,
+            rec: [],
+            rpe: [],
+            sleep: [],
+            fad: [],
+            est: [],
+            dor: [],
+            load: []
+          };
+        }
+
+        const recVal = safeNullable(row["RECUPERAÇÃO"]);
+        const rpeVal = safeNullable(row["ESFORÇO"]);
+        const sleepVal = safeNullable(row["SONO"]);
+        const fadVal = safeNullable(row["FADIGA"]);
+        const estVal = safeNullable(row["ESTRESSE"]);
+        const dorVal = safeNullable(row["DOR"]);
+        const loadVal = getTrainingLoad(row);
+
+        if(recVal !== null) grouped[key].rec.push(recVal);
+        if(rpeVal !== null) grouped[key].rpe.push(rpeVal);
+        if(sleepVal !== null) grouped[key].sleep.push(sleepVal);
+        if(fadVal !== null) grouped[key].fad.push(fadVal);
+        if(estVal !== null) grouped[key].est.push(estVal);
+        if(dorVal !== null) grouped[key].dor.push(dorVal);
+        if(loadVal !== null) grouped[key].load.push(loadVal);
+      });
+
+      const orderedGroups = Object.values(grouped).sort((a, b) => {
+        const [da, ma, aa] = a.date.split("/");
+        const [db, mb, ab] = b.date.split("/");
+
+        const ta = new Date(`${aa}-${ma.padStart(2,"0")}-${da.padStart(2,"0")}T${a.shift === "Manhã" ? "08:00:00" : "16:00:00"}`).getTime();
+        const tb = new Date(`${ab}-${mb.padStart(2,"0")}-${db.padStart(2,"0")}T${b.shift === "Manhã" ? "08:00:00" : "16:00:00"}`).getTime();
+
+        return ta - tb;
+      });
+
+      return {
+        labels: orderedGroups.map(g => `${formatDateBR(g.date)} • ${g.shift}`),
+        rec: orderedGroups.map(g => averageOrNull(g.rec)),
+        rpe: orderedGroups.map(g => averageOrNull(g.rpe)),
+        sleep: orderedGroups.map(g => averageOrNull(g.sleep)),
+        fad: orderedGroups.map(g => averageOrNull(g.fad)),
+        est: orderedGroups.map(g => averageOrNull(g.est)),
+        dor: orderedGroups.map(g => averageOrNull(g.dor)),
+        loadData: orderedGroups.map(g => averageOrNull(g.load))
+      };
+    }
+
     function updateDashboard(){
       const data = sortByTimestamp(getFilteredData());
       const athlete = document.getElementById("athleteFilter").value;
@@ -1474,14 +1574,35 @@
         currentAlertsData = [];
       }
 
-      const labels = data.map(d => getDateLabel(d));
-      const rec = data.map(d => safeNullable(d["RECUPERAÇÃO"]));
-      const rpe = data.map(d => safeNullable(d["ESFORÇO"]));
-      const sleep = data.map(d => safeNullable(d["SONO"]));
-      const fad = data.map(d => safeNullable(d["FADIGA"]));
-      const est = data.map(d => safeNullable(d["ESTRESSE"]));
-      const dor = data.map(d => safeNullable(d["DOR"]));
-      const loadData = data.map(d => getTrainingLoad(d));
+      let labels = [];
+      let rec = [];
+      let rpe = [];
+      let sleep = [];
+      let fad = [];
+      let est = [];
+      let dor = [];
+      let loadData = [];
+
+      if(athlete === "Equipe"){
+        const teamSeries = buildTeamWellnessSeries(data);
+        labels = teamSeries.labels;
+        rec = teamSeries.rec;
+        rpe = teamSeries.rpe;
+        sleep = teamSeries.sleep;
+        fad = teamSeries.fad;
+        est = teamSeries.est;
+        dor = teamSeries.dor;
+        loadData = teamSeries.loadData;
+      } else {
+        labels = data.map(d => getDateLabel(d));
+        rec = data.map(d => safeNullable(d["RECUPERAÇÃO"]));
+        rpe = data.map(d => safeNullable(d["ESFORÇO"]));
+        sleep = data.map(d => safeNullable(d["SONO"]));
+        fad = data.map(d => safeNullable(d["FADIGA"]));
+        est = data.map(d => safeNullable(d["ESTRESSE"]));
+        dor = data.map(d => safeNullable(d["DOR"]));
+        loadData = data.map(d => getTrainingLoad(d));
+      }
 
       drawWellness(labels, rec, rpe, sleep, fad, est, dor, loadData);
       updateAthleteSection(data);
