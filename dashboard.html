@@ -989,16 +989,55 @@
       return 0;
     }
 
+    function getShiftSpecificValue(row, kind, shift){
+      const map = {
+        esforco: {
+          Manhã: [
+            "ESFORÇO TREINO 1", "ESFORÇO 1", "ESFORCO TREINO 1", "ESFORCO 1",
+            "PSE TREINO 1", "PSE 1", "RPE TREINO 1", "RPE 1"
+          ],
+          Tarde: [
+            "ESFORÇO TREINO 2", "ESFORÇO 2", "ESFORCO TREINO 2", "ESFORCO 2",
+            "PSE TREINO 2", "PSE 2", "RPE TREINO 2", "RPE 2"
+          ],
+          Geral: [
+            "ESFORÇO", "ESFORCO", "PSE", "RPE"
+          ]
+        },
+        tempo: {
+          Manhã: [
+            "TEMPO TREINO 1", "TEMPO DE TREINO 1", "TEMPO SESSÃO 1", "TEMPO SESSAO 1",
+            "TEMPO 1", "DURAÇÃO 1", "DURACAO 1", "DURAÇÃO TREINO 1", "DURACAO TREINO 1"
+          ],
+          Tarde: [
+            "TEMPO TREINO 2", "TEMPO DE TREINO 2", "TEMPO SESSÃO 2", "TEMPO SESSAO 2",
+            "TEMPO 2", "DURAÇÃO 2", "DURACAO 2", "DURAÇÃO TREINO 2", "DURACAO TREINO 2"
+          ],
+          Geral: [
+            "TEMPO SESSÃO", "TEMPO DA SESSÃO", "TEMPO SESSAO", "DURAÇÃO", "DURACAO", "TEMPO"
+          ]
+        }
+      };
+
+      const specificKeys = map[kind][shift] || [];
+      for(const key of specificKeys){
+        const val = safeNullable(row[key]);
+        if(val !== null) return val;
+      }
+
+      for(const key of map[kind].Geral){
+        const val = safeNullable(row[key]);
+        if(val !== null) return val;
+      }
+
+      return null;
+    }
+
     function getTrainingLoad(row){
-      const esforco = safeNullable(row["ESFORÇO"]);
-      const tempo = safeNullable(
-        row["TEMPO SESSÃO"] ||
-        row["TEMPO DA SESSÃO"] ||
-        row["TEMPO SESSAO"] ||
-        row["DURAÇÃO"] ||
-        row["DURACAO"] ||
-        row["TEMPO"]
-      );
+      const shift = getShiftLabel(row);
+      const esforco = getShiftSpecificValue(row, "esforco", shift);
+      const tempo = getShiftSpecificValue(row, "tempo", shift);
+
       if(esforco === null || tempo === null) return null;
       return esforco * tempo;
     }
@@ -1563,7 +1602,7 @@
         }
 
         const recVal = safeNullable(row["RECUPERAÇÃO"]);
-        const rpeVal = safeNullable(row["ESFORÇO"]);
+        const rpeVal = getShiftSpecificValue(row, "esforco", shift);
         const sleepVal = safeNullable(row["SONO"]);
         const fadVal = safeNullable(row["FADIGA"]);
         const estVal = safeNullable(row["ESTRESSE"]);
@@ -1645,7 +1684,10 @@
       } else {
         labels = monitorData.map(d => getDateLabel(d));
         rec = monitorData.map(d => safeNullable(d["RECUPERAÇÃO"]));
-        rpe = monitorData.map(d => safeNullable(d["ESFORÇO"]));
+        rpe = monitorData.map(d => {
+          const shift = getShiftLabel(d);
+          return getShiftSpecificValue(d, "esforco", shift);
+        });
         sleep = monitorData.map(d => safeNullable(d["SONO"]));
         fad = monitorData.map(d => safeNullable(d["FADIGA"]));
         est = monitorData.map(d => safeNullable(d["ESTRESSE"]));
