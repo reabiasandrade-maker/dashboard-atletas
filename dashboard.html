@@ -618,9 +618,13 @@
   </div>
 
   <script>
-    const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2zqGesxYsRhgphN6dpzLhoCCHk54JzzXT7PEFYhLni7uegkBTxRrj8_q3ZzJdN9P77Uum8C078cD8/pub?gid=1108601119&single=true&output=csv";
+    const MONITORAMENTO_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2zqGesxYsRhgphN6dpzLhoCCHk54JzzXT7PEFYhLni7uegkBTxRrj8_q3ZzJdN9P77Uum8C078cD8/pub?gid=1108601119&single=true&output=csv";
+    const DESEMPENHO_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2zqGesxYsRhgphN6dpzLhoCCHk54JzzXT7PEFYhLni7uegkBTxRrj8_q3ZzJdN9P77Uum8C078cD8/pub?gid=1791609294&single=true&output=csv";
+    const COMPOSICAO_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2zqGesxYsRhgphN6dpzLhoCCHk54JzzXT7PEFYhLni7uegkBTxRrj8_q3ZzJdN9P77Uum8C078cD8/pub?gid=1621298071&single=true&output=csv";
 
-    let rawData = [];
+    let monitoramentoData = [];
+    let desempenhoData = [];
+    let composicaoData = [];
     let charts = {};
     let currentAlertsData = [];
 
@@ -647,28 +651,51 @@
       return valid.reduce((a,b)=>a+b,0) / valid.length;
     }
 
+    function getName(row){
+      return String(
+        row["Nome"] ||
+        row["NOME"] ||
+        row["Atleta"] ||
+        row["ATLETA"] ||
+        row["atleta"] ||
+        ""
+      ).trim();
+    }
+
     function getTeam(name){
       if(!name) return "";
       const parts = String(name).trim().split(" ");
       return parts[parts.length - 1];
     }
 
-    function getDateTimeValue(row){
-      const raw = row["Carimbo de data/hora"];
+    function getTimestampFromAnyDate(raw){
       if(!raw) return 0;
 
-      const [datePart, timePart] = raw.split(" ");
-      if(!datePart) return 0;
+      const s = String(raw).trim();
+      if(!s) return 0;
 
+      const [datePart, timePart = "00:00:00"] = s.split(" ");
       const d = datePart.split("/");
-      if(d.length !== 3) return 0;
 
-      const day = d[0].padStart(2, "0");
-      const month = d[1].padStart(2, "0");
-      const year = d[2];
-      const time = timePart || "00:00:00";
+      if(d.length === 3){
+        const day = d[0].padStart(2, "0");
+        const month = d[1].padStart(2, "0");
+        const year = d[2];
+        return new Date(`${year}-${month}-${day}T${timePart}`).getTime();
+      }
 
-      return new Date(`${year}-${month}-${day}T${time}`).getTime();
+      const iso = new Date(s).getTime();
+      return isNaN(iso) ? 0 : iso;
+    }
+
+    function getDateTimeValue(row){
+      return getTimestampFromAnyDate(
+        row["Carimbo de data/hora"] ||
+        row["Data"] ||
+        row["DATA"] ||
+        row["data"] ||
+        ""
+      );
     }
 
     function sortByTimestamp(data){
@@ -677,7 +704,7 @@
 
     function formatDateBR(dateString){
       if(!dateString) return "";
-      const onlyDate = dateString.split(" ")[0];
+      const onlyDate = String(dateString).split(" ")[0];
       const parts = onlyDate.split("/");
       if(parts.length === 3){
         return `${parts[0]}/${parts[1]}`;
@@ -724,9 +751,20 @@
     }
 
     function getDateLabel(row){
-      const date = formatDateBR(row["Carimbo de data/hora"] || "");
+      const date = formatDateBR(row["Carimbo de data/hora"] || row["Data"] || "");
       const shift = getShiftLabel(row);
       return shift ? `${date} • ${shift}` : date;
+    }
+
+    function getPhase(row){
+      return String(
+        row["Fase"] ||
+        row["FASE"] ||
+        row["fase"] ||
+        row["Etapa"] ||
+        row["ETAPA"] ||
+        ""
+      ).trim();
     }
 
     function destroyChart(name){
@@ -751,25 +789,59 @@
       document.getElementById("vo2Metric").innerText = "-";
     }
 
-    function getFilteredData(){
+    function getFilteredMonitoramentoData(){
       const team = document.getElementById("teamFilter").value;
       const athlete = document.getElementById("athleteFilter").value;
 
-      let data = [...rawData];
+      let data = [...monitoramentoData];
 
       if(team !== "Todas"){
-        data = data.filter(d => getTeam(d["Nome"]) === team);
+        data = data.filter(d => getTeam(getName(d)) === team);
       }
 
       if(athlete !== "Equipe"){
-        data = data.filter(d => d["Nome"] === athlete);
+        data = data.filter(d => getName(d) === athlete);
+      }
+
+      return data;
+    }
+
+    function getFilteredDesempenhoData(){
+      const team = document.getElementById("teamFilter").value;
+      const athlete = document.getElementById("athleteFilter").value;
+
+      let data = [...desempenhoData];
+
+      if(team !== "Todas"){
+        data = data.filter(d => getTeam(getName(d)) === team);
+      }
+
+      if(athlete !== "Equipe"){
+        data = data.filter(d => getName(d) === athlete);
+      }
+
+      return data;
+    }
+
+    function getFilteredComposicaoData(){
+      const team = document.getElementById("teamFilter").value;
+      const athlete = document.getElementById("athleteFilter").value;
+
+      let data = [...composicaoData];
+
+      if(team !== "Todas"){
+        data = data.filter(d => getTeam(getName(d)) === team);
+      }
+
+      if(athlete !== "Equipe"){
+        data = data.filter(d => getName(d) === athlete);
       }
 
       return data;
     }
 
     function getAthletesFromData(data){
-      return [...new Set(data.map(d => d["Nome"]).filter(Boolean))].sort();
+      return [...new Set(data.map(d => getName(d)).filter(Boolean))].sort();
     }
 
     function getLatestRowByAthlete(data){
@@ -777,7 +849,7 @@
       const result = [];
 
       athletes.forEach(name => {
-        const rows = sortByTimestamp(data.filter(r => r["Nome"] === name));
+        const rows = sortByTimestamp(data.filter(r => getName(r) === name));
         const last = rows[rows.length - 1];
         if(last) result.push(last);
       });
@@ -908,10 +980,19 @@
         row["Arremesso MB 3"]
       );
 
+      const mediaDireta = safeNullable(
+        row["Média Arremesso"] ||
+        row["MEDIA ARREMESSO"] ||
+        row["Arremesso"] ||
+        row["ARREMESSO"]
+      );
+
       const valores = [a1, a2, a3].filter(v => v !== null && !isNaN(v));
 
-      if(!valores.length) return 0;
-      return valores.reduce((a,b)=>a+b,0) / valores.length;
+      if(valores.length) return valores.reduce((a,b)=>a+b,0) / valores.length;
+      if(mediaDireta !== null) return mediaDireta;
+
+      return 0;
     }
 
     function getAbsolutePhaseValue(rows, getter){
@@ -1309,7 +1390,7 @@
 
         if(issues.length){
           alerts.push({
-            nome: row["Nome"],
+            nome: getName(row),
             criterios: issues
           });
         }
@@ -1379,7 +1460,7 @@
 
         const name = document.createElement("div");
         name.className = "heat-name";
-        name.textContent = row["Nome"];
+        name.textContent = getName(row);
         wrap.appendChild(name);
 
         metrics.forEach(m => {
@@ -1410,7 +1491,7 @@
       document.getElementById("kpiAthletes").innerText = eligibleRows.length;
     }
 
-    function updateAthleteSection(data){
+    function updateAthleteSection(){
       const athlete = document.getElementById("athleteFilter").value;
       const perfil = document.getElementById("perfilSection");
       const chartsSection = document.getElementById("athleteChartsSection");
@@ -1423,41 +1504,47 @@
         return;
       }
 
+      const desempenho = sortByTimestamp(getFilteredDesempenhoData());
+      const composicao = sortByTimestamp(getFilteredComposicaoData());
+
       perfil.style.display = "block";
       chartsSection.style.display = "grid";
 
-      const sorted = sortByTimestamp(data);
-      const latest = sorted[sorted.length - 1];
-
-      if(latest){
-        document.getElementById("cmjMetric").innerText = fmtMetric(latest["Média CMJ"]);
-        document.getElementById("sjMetric").innerText = fmtMetric(latest["Média Squat Jump"]);
-        document.getElementById("mbMetric").innerText = fmtMetric(getArremesso(latest));
-        document.getElementById("vo2Metric").innerText = fmtMetric(getVO2(latest));
+      if(!desempenho.length && !composicao.length){
+        destroyAthleteCharts();
+        resetAthleteMetrics();
+        return;
       }
 
-      const fases = [...new Set(sorted.map(d => d["Fase"]).filter(Boolean))];
+      const latestDesempenho = desempenho.length ? desempenho[desempenho.length - 1] : null;
+
+      document.getElementById("cmjMetric").innerText = latestDesempenho ? fmtMetric(latestDesempenho["Média CMJ"] || latestDesempenho["CMJ"]) : "-";
+      document.getElementById("sjMetric").innerText = latestDesempenho ? fmtMetric(latestDesempenho["Média Squat Jump"] || latestDesempenho["Squat Jump"] || latestDesempenho["SJ"]) : "-";
+      document.getElementById("mbMetric").innerText = latestDesempenho ? fmtMetric(getArremesso(latestDesempenho)) : "-";
+      document.getElementById("vo2Metric").innerText = latestDesempenho ? fmtMetric(getVO2(latestDesempenho)) : "-";
+
+      const fasesDesempenho = [...new Set(desempenho.map(d => getPhase(d)).filter(Boolean))];
 
       const cmjPhase = [];
       const sjPhase = [];
       const mbPhase = [];
       const vo2Phase = [];
 
-      fases.forEach(f => {
-        const rows = sorted.filter(r => r["Fase"] === f);
+      fasesDesempenho.forEach(f => {
+        const rows = desempenho.filter(r => getPhase(r) === f);
 
-        cmjPhase.push(getAbsolutePhaseValue(rows, r => safe(r["Média CMJ"])));
-        sjPhase.push(getAbsolutePhaseValue(rows, r => safe(r["Média Squat Jump"])));
+        cmjPhase.push(getAbsolutePhaseValue(rows, r => safe(r["Média CMJ"] || r["CMJ"])));
+        sjPhase.push(getAbsolutePhaseValue(rows, r => safe(r["Média Squat Jump"] || r["Squat Jump"] || r["SJ"])));
         mbPhase.push(getAbsolutePhaseValue(rows, r => getArremesso(r)));
         vo2Phase.push(getAbsolutePhaseValue(rows, r => getVO2(r)));
       });
 
-      drawSinglePhaseBarChart("cmjPhaseChart", "cmjPhaseChart", "CMJ", fases, cmjPhase, "#0891b2");
-      drawSinglePhaseBarChart("sjPhaseChart", "sjPhaseChart", "Squat Jump", fases, sjPhase, "#2563eb");
-      drawSinglePhaseBarChart("mbPhaseChart", "mbPhaseChart", "Arremesso", fases, mbPhase, "#7c3aed");
-      drawVO2Chart(fases, vo2Phase);
+      drawSinglePhaseBarChart("cmjPhaseChart", "cmjPhaseChart", "CMJ", fasesDesempenho, cmjPhase, "#0891b2");
+      drawSinglePhaseBarChart("sjPhaseChart", "sjPhaseChart", "Squat Jump", fasesDesempenho, sjPhase, "#2563eb");
+      drawSinglePhaseBarChart("mbPhaseChart", "mbPhaseChart", "Arremesso", fasesDesempenho, mbPhase, "#7c3aed");
+      drawVO2Chart(fasesDesempenho, vo2Phase);
 
-      const bodyPhaseLabels = [...new Set(sorted.map(d => d["Fase"]).filter(Boolean))];
+      const fasesComposicao = [...new Set(composicao.map(d => getPhase(d)).filter(Boolean))];
 
       const pesoPhase = [];
       const pctGPhase = [];
@@ -1465,8 +1552,8 @@
       const massaMagraPhase = [];
       const pctMassaMagraPhase = [];
 
-      bodyPhaseLabels.forEach(f => {
-        const rows = sorted.filter(r => r["Fase"] === f);
+      fasesComposicao.forEach(f => {
+        const rows = composicao.filter(r => getPhase(r) === f);
 
         pesoPhase.push(getAbsolutePhaseValue(rows, r => getPeso(r)));
         pctGPhase.push(getAbsolutePhaseValue(rows, r => getPctG(r)));
@@ -1476,7 +1563,7 @@
       });
 
       drawBodyCompChart(
-        bodyPhaseLabels,
+        fasesComposicao,
         pesoPhase,
         pctGPhase,
         massaGordaPhase,
@@ -1551,21 +1638,21 @@
     }
 
     function updateDashboard(){
-      const data = sortByTimestamp(getFilteredData());
+      const monitorData = sortByTimestamp(getFilteredMonitoramentoData());
       const athlete = document.getElementById("athleteFilter").value;
 
       const heatmapCard = document.getElementById("heatmapCard");
       const kpiAlertsCard = document.getElementById("kpiAlertsCard");
       const kpiAthletesCard = document.getElementById("kpiAthletesCard");
 
-      updateKPIs(data);
+      updateKPIs(monitorData);
 
       if(athlete === "Equipe"){
         heatmapCard.style.display = "block";
         kpiAlertsCard.style.display = "block";
         kpiAthletesCard.style.display = "block";
-        updateAlertsKPI(data);
-        buildHeatmap(data);
+        updateAlertsKPI(monitorData);
+        buildHeatmap(monitorData);
       } else {
         heatmapCard.style.display = "none";
         kpiAlertsCard.style.display = "none";
@@ -1584,7 +1671,7 @@
       let loadData = [];
 
       if(athlete === "Equipe"){
-        const teamSeries = buildTeamWellnessSeries(data);
+        const teamSeries = buildTeamWellnessSeries(monitorData);
         labels = teamSeries.labels;
         rec = teamSeries.rec;
         rpe = teamSeries.rpe;
@@ -1594,26 +1681,26 @@
         dor = teamSeries.dor;
         loadData = teamSeries.loadData;
       } else {
-        labels = data.map(d => getDateLabel(d));
-        rec = data.map(d => safeNullable(d["RECUPERAÇÃO"]));
-        rpe = data.map(d => safeNullable(d["ESFORÇO"]));
-        sleep = data.map(d => safeNullable(d["SONO"]));
-        fad = data.map(d => safeNullable(d["FADIGA"]));
-        est = data.map(d => safeNullable(d["ESTRESSE"]));
-        dor = data.map(d => safeNullable(d["DOR"]));
-        loadData = data.map(d => getTrainingLoad(d));
+        labels = monitorData.map(d => getDateLabel(d));
+        rec = monitorData.map(d => safeNullable(d["RECUPERAÇÃO"]));
+        rpe = monitorData.map(d => safeNullable(d["ESFORÇO"]));
+        sleep = monitorData.map(d => safeNullable(d["SONO"]));
+        fad = monitorData.map(d => safeNullable(d["FADIGA"]));
+        est = monitorData.map(d => safeNullable(d["ESTRESSE"]));
+        dor = monitorData.map(d => safeNullable(d["DOR"]));
+        loadData = monitorData.map(d => getTrainingLoad(d));
       }
 
       drawWellness(labels, rec, rpe, sleep, fad, est, dor, loadData);
-      updateAthleteSection(data);
+      updateAthleteSection();
     }
 
     function getFilteredAthletesByTeam(){
       const team = document.getElementById("teamFilter").value;
-      let data = [...rawData];
+      let data = [...monitoramentoData];
 
       if(team !== "Todas"){
-        data = data.filter(d => getTeam(d["Nome"]) === team);
+        data = data.filter(d => getTeam(getName(d)) === team);
       }
 
       return getAthletesFromData(data);
@@ -1665,19 +1752,36 @@
       });
     }
 
-    function load(){
-      Papa.parse(sheetURL, {
-        download:true,
-        header:true,
-        complete:function(res){
-          rawData = res.data.filter(r => r["Nome"]);
-          populateAthletesByTeam();
-          updateDashboard();
-        },
-        error:function(err){
-          console.error("Erro ao carregar CSV:", err);
-        }
+    function parseCsv(url){
+      return new Promise((resolve, reject) => {
+        Papa.parse(url, {
+          download:true,
+          header:true,
+          skipEmptyLines:true,
+          complete:(res) => resolve(res.data || []),
+          error:(err) => reject(err)
+        });
       });
+    }
+
+    async function load(){
+      try{
+        const [monitorRows, desempenhoRows, composicaoRows] = await Promise.all([
+          parseCsv(MONITORAMENTO_URL),
+          parseCsv(DESEMPENHO_URL),
+          parseCsv(COMPOSICAO_URL)
+        ]);
+
+        monitoramentoData = monitorRows.filter(r => getName(r));
+        desempenhoData = desempenhoRows.filter(r => getName(r));
+        composicaoData = composicaoRows.filter(r => getName(r));
+
+        populateAthletesByTeam();
+        updateDashboard();
+      }catch(err){
+        console.error("Erro ao carregar planilhas:", err);
+        alert("Erro ao carregar os dados das abas do Google Sheets.");
+      }
     }
 
     attachEvents();
