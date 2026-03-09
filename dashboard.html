@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sports Science Dashboard PRO</title>
+  <title>Smart Training</title>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
@@ -437,7 +437,7 @@
 
     <div class="header">
       <div class="title-wrap">
-        <h1>Sports Science Dashboard PRO</h1>
+        <h1>Smart Training</h1>
         <p>Monitoramento de wellness, carga interna, prontidão e performance</p>
       </div>
 
@@ -569,7 +569,7 @@
           <div class="card-header">
             <div>
               <div class="card-title">Heatmap de Prontidão</div>
-              <div class="card-subtitle">Último registro de cada atleta</div>
+              <div class="card-subtitle">Último registro válido de cada atleta</div>
             </div>
           </div>
 
@@ -608,7 +608,7 @@
       <div class="modal-header">
         <div>
           <h2 class="modal-title">Atletas em Alerta</h2>
-          <div class="modal-subtitle">Registro mais recente de cada atleta no filtro atual</div>
+          <div class="modal-subtitle">Registro mais recente válido de cada atleta no filtro atual</div>
         </div>
         <button class="modal-close" id="closeAlertsModal" type="button">&times;</button>
       </div>
@@ -625,9 +625,15 @@
     let currentAlertsData = [];
 
     function safe(v){
-      if(v === null || v === undefined || v === "") return 0;
+      if(v === null || v === undefined || String(v).trim() === "") return 0;
       const n = Number(String(v).replace(",", "."));
       return isNaN(n) ? 0 : n;
+    }
+
+    function safeNullable(v){
+      if(v === null || v === undefined || String(v).trim() === "") return null;
+      const n = Number(String(v).replace(",", "."));
+      return isNaN(n) ? null : n;
     }
 
     function fmtMetric(v){
@@ -751,8 +757,8 @@
     }
 
     function getTrainingLoad(row){
-      const esforco = safe(row["ESFORÇO"]);
-      const tempo = safe(
+      const esforco = safeNullable(row["ESFORÇO"]);
+      const tempo = safeNullable(
         row["TEMPO SESSÃO"] ||
         row["TEMPO DA SESSÃO"] ||
         row["TEMPO SESSAO"] ||
@@ -760,6 +766,7 @@
         row["DURACAO"] ||
         row["TEMPO"]
       );
+      if(esforco === null || tempo === null) return null;
       return esforco * tempo;
     }
 
@@ -833,25 +840,25 @@
     }
 
     function getArremesso(row){
-      const a1 = safe(
+      const a1 = safeNullable(
         row["Arremesso Medicine Ball 1"] ||
         row["Arremesso 1"] ||
         row["Arremesso MB 1"]
       );
 
-      const a2 = safe(
+      const a2 = safeNullable(
         row["Arremesso Medicine Ball 2"] ||
         row["Arremesso 2"] ||
         row["Arremesso MB 2"]
       );
 
-      const a3 = safe(
+      const a3 = safeNullable(
         row["Arremesso Medicine Ball 3"] ||
         row["Arremesso 3"] ||
         row["Arremesso MB 3"]
       );
 
-      const valores = [a1, a2, a3].filter(v => v > 0);
+      const valores = [a1, a2, a3].filter(v => v !== null && !isNaN(v));
 
       if(!valores.length) return 0;
       return valores.reduce((a,b)=>a+b,0) / valores.length;
@@ -860,10 +867,9 @@
     function getAbsolutePhaseValue(rows, getter){
       const valores = rows
         .map(r => getter(r))
-        .filter(v => !isNaN(v) && v > 0);
+        .filter(v => v !== null && v !== undefined && !isNaN(v) && v !== 0);
 
       if(!valores.length) return 0;
-
       return valores[valores.length - 1];
     }
 
@@ -872,6 +878,7 @@
         responsive:true,
         maintainAspectRatio:false,
         interaction:{mode:"index", intersect:false},
+        spanGaps:false,
         plugins:{
           legend:{
             labels:{
@@ -1003,6 +1010,7 @@
           responsive:true,
           maintainAspectRatio:false,
           interaction:{mode:"index", intersect:false},
+          spanGaps:false,
           plugins:{
             legend:{
               labels:{
@@ -1236,17 +1244,18 @@
 
       latestRows.forEach(row => {
         const issues = [];
-        const rec = safe(row["RECUPERAÇÃO"]);
-        const sono = safe(row["SONO"]);
-        const fad = safe(row["FADIGA"]);
-        const est = safe(row["ESTRESSE"]);
-        const dor = safe(row["DOR"]);
 
-        if(rec < 6) issues.push("Recuperação < 6");
-        if(sono < 4) issues.push("Sono < 4");
-        if(fad < 4) issues.push("Fadiga < 4");
-        if(est < 4) issues.push("Estresse < 4");
-        if(dor < 4) issues.push("Dor < 4");
+        const rec = safeNullable(row["RECUPERAÇÃO"]);
+        const sono = safeNullable(row["SONO"]);
+        const fad = safeNullable(row["FADIGA"]);
+        const est = safeNullable(row["ESTRESSE"]);
+        const dor = safeNullable(row["DOR"]);
+
+        if(rec !== null && rec < 6) issues.push("Recuperação < 6");
+        if(sono !== null && sono < 4) issues.push("Sono < 4");
+        if(fad !== null && fad < 4) issues.push("Fadiga < 4");
+        if(est !== null && est < 4) issues.push("Estresse < 4");
+        if(dor !== null && dor < 4) issues.push("Dor < 4");
 
         if(issues.length){
           alerts.push({
@@ -1308,11 +1317,11 @@
 
       latestRows.forEach(row => {
         const metrics = [
-          {label:"R", value:safe(row["RECUPERAÇÃO"])},
-          {label:"S", value:safe(row["SONO"])},
-          {label:"F", value:safe(row["FADIGA"])},
-          {label:"E", value:safe(row["ESTRESSE"])},
-          {label:"D", value:safe(row["DOR"])}
+          {label:"R", value:safeNullable(row["RECUPERAÇÃO"])},
+          {label:"S", value:safeNullable(row["SONO"])},
+          {label:"F", value:safeNullable(row["FADIGA"])},
+          {label:"E", value:safeNullable(row["ESTRESSE"])},
+          {label:"D", value:safeNullable(row["DOR"])}
         ];
 
         const wrap = document.createElement("div");
@@ -1326,9 +1335,19 @@
         metrics.forEach(m => {
           const cell = document.createElement("div");
           cell.className = "heat-cell";
-          cell.style.background = getReadinessColor(m.value);
-          cell.title = `${m.label}: ${m.value}`;
-          cell.innerText = m.value ? m.value.toFixed(0) : "-";
+
+          if(m.value === null){
+            cell.style.background = "#f8fafc";
+            cell.style.border = "1px solid #e2e8f0";
+            cell.style.color = "#94a3b8";
+            cell.title = `${m.label}: sem dado`;
+            cell.innerText = "-";
+          } else {
+            cell.style.background = getReadinessColor(m.value);
+            cell.title = `${m.label}: ${m.value}`;
+            cell.innerText = m.value.toFixed(0);
+          }
+
           wrap.appendChild(cell);
         });
 
@@ -1441,12 +1460,12 @@
       }
 
       const labels = data.map(d => getDateLabel(d));
-      const rec = data.map(d => safe(d["RECUPERAÇÃO"]));
-      const rpe = data.map(d => safe(d["ESFORÇO"]));
-      const sleep = data.map(d => safe(d["SONO"]));
-      const fad = data.map(d => safe(d["FADIGA"]));
-      const est = data.map(d => safe(d["ESTRESSE"]));
-      const dor = data.map(d => safe(d["DOR"]));
+      const rec = data.map(d => safeNullable(d["RECUPERAÇÃO"]));
+      const rpe = data.map(d => safeNullable(d["ESFORÇO"]));
+      const sleep = data.map(d => safeNullable(d["SONO"]));
+      const fad = data.map(d => safeNullable(d["FADIGA"]));
+      const est = data.map(d => safeNullable(d["ESTRESSE"]));
+      const dor = data.map(d => safeNullable(d["DOR"]));
       const loadData = data.map(d => getTrainingLoad(d));
 
       drawWellness(labels, rec, rpe, sleep, fad, est, dor, loadData);
