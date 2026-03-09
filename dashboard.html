@@ -1,1011 +1,529 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Training</title>
+<script>
+  const MONITORAMENTO_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2zqGesxYsRhgphN6dpzLhoCCHk54JzzXT7PEFYhLni7uegkBTxRrj8_q3ZzJdN9P77Uum8C078cD8/pub?gid=1108601119&single=true&output=csv";
+  const DESEMPENHO_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2zqGesxYsRhgphN6dpzLhoCCHk54JzzXT7PEFYhLni7uegkBTxRrj8_q3ZzJdN9P77Uum8C078cD8/pub?gid=1791609294&single=true&output=csv";
+  const COMPOSICAO_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2zqGesxYsRhgphN6dpzLhoCCHk54JzzXT7PEFYhLni7uegkBTxRrj8_q3ZzJdN9P77Uum8C078cD8/pub?gid=1621298071&single=true&output=csv";
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  let monitoramentoData = [];
+  let desempenhoData = [];
+  let composicaoData = [];
+  let charts = {};
+  let currentAlertsData = [];
 
-  <style>
-    :root{
-      --bg:#f1f5f9;
-      --panel:#ffffff;
-      --panel-soft:#f8fafc;
-      --border:#e2e8f0;
-      --text:#0f172a;
-      --muted:#64748b;
-      --green:#16a34a;
-      --green-soft:#dcfce7;
-      --yellow:#f59e0b;
-      --red:#dc2626;
-      --red-soft:#fee2e2;
-      --blue:#2563eb;
-      --cyan:#0891b2;
-      --purple:#7c3aed;
-      --shadow:0 10px 30px rgba(15,23,42,0.06);
-      --radius:18px;
+  function safe(v){
+    if(v === null || v === undefined || String(v).trim() === "") return 0;
+    const n = Number(String(v).replace(",", "."));
+    return isNaN(n) ? 0 : n;
+  }
+
+  function safeNullable(v){
+    if(v === null || v === undefined || String(v).trim() === "") return null;
+    const n = Number(String(v).replace(",", "."));
+    return isNaN(n) ? null : n;
+  }
+
+  function fmtMetric(v){
+    const n = safe(v);
+    return n ? n.toFixed(2) : "-";
+  }
+
+  function averageOrNull(arr){
+    const valid = arr.filter(v => v !== null && v !== undefined && !isNaN(v));
+    if(!valid.length) return null;
+    return valid.reduce((a,b)=>a+b,0) / valid.length;
+  }
+
+  function normalizeText(v){
+    return String(v || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLowerCase();
+  }
+
+  function getName(row){
+    return String(
+      row["Nome"] ||
+      row["NOME"] ||
+      row["Atleta"] ||
+      row["ATLETA"] ||
+      row["atleta"] ||
+      ""
+    ).trim();
+  }
+
+  function getTeamFromRow(row){
+    return String(
+      row["Equipe"] ||
+      row["EQUIPE"] ||
+      row["equipe"] ||
+      row["Categoria"] ||
+      row["CATEGORIA"] ||
+      row["categoria"] ||
+      ""
+    ).trim();
+  }
+
+  function getTeam(name){
+    if(!name) return "";
+    const parts = String(name).trim().split(" ");
+    return parts[parts.length - 1];
+  }
+
+  function rowMatchesTeam(row, selectedTeam){
+    if(selectedTeam === "Todas") return true;
+
+    const teamFromColumn = getTeamFromRow(row);
+    if(teamFromColumn){
+      return normalizeText(teamFromColumn) === normalizeText(selectedTeam);
     }
 
-    *{box-sizing:border-box}
+    return normalizeText(getTeam(getName(row))) === normalizeText(selectedTeam);
+  }
 
-    body{
-      margin:0;
-      padding:28px;
-      font-family:'Inter',sans-serif;
-      background:linear-gradient(180deg,#f8fafc 0%, #eef2f7 100%);
-      color:var(--text);
+  function rowMatchesAthlete(row, selectedAthlete){
+    if(selectedAthlete === "Equipe") return true;
+    return normalizeText(getName(row)) === normalizeText(selectedAthlete);
+  }
+
+  function getTimestampFromAnyDate(raw){
+    if(!raw) return 0;
+
+    const s = String(raw).trim();
+    if(!s) return 0;
+
+    const [datePart, timePart = "00:00:00"] = s.split(" ");
+    const d = datePart.split("/");
+
+    if(d.length === 3){
+      const day = d[0].padStart(2, "0");
+      const month = d[1].padStart(2, "0");
+      const year = d[2];
+      return new Date(`${year}-${month}-${day}T${timePart}`).getTime();
     }
 
-    .container{max-width:1700px;margin:auto}
+    const iso = new Date(s).getTime();
+    return isNaN(iso) ? 0 : iso;
+  }
 
-    .header{
-      display:flex;
-      justify-content:space-between;
-      align-items:flex-end;
-      gap:20px;
-      margin-bottom:22px;
-      flex-wrap:wrap;
+  function getDateTimeValue(row){
+    return getTimestampFromAnyDate(
+      row["Carimbo de data/hora"] ||
+      row["Data"] ||
+      row["DATA"] ||
+      row["data"] ||
+      ""
+    );
+  }
+
+  function sortByTimestamp(data){
+    return [...data].sort((a,b) => getDateTimeValue(a) - getDateTimeValue(b));
+  }
+
+  function formatDateBR(dateString){
+    if(!dateString) return "";
+    const onlyDate = String(dateString).split(" ")[0];
+    const parts = onlyDate.split("/");
+    if(parts.length === 3){
+      return `${parts[0]}/${parts[1]}`;
+    }
+    return onlyDate;
+  }
+
+  function getShiftLabel(row){
+    const raw = String(
+      row["Turno"] ||
+      row["TREINO"] ||
+      row["Treino"] ||
+      row["treino"] ||
+      row["Fase"] ||
+      ""
+    ).trim().toLowerCase();
+
+    if(
+      raw === "1" ||
+      raw === "turno 1" ||
+      raw === "treino 1" ||
+      raw === "fase 1" ||
+      raw.includes("treino 1") ||
+      raw.includes("turno 1") ||
+      raw === "manhã" ||
+      raw === "manha"
+    ){
+      return "Manhã";
     }
 
-    .title-wrap h1{
-      margin:0;
-      font-size:34px;
-      line-height:1.05;
-      letter-spacing:-0.03em;
-      font-weight:800;
+    if(
+      raw === "2" ||
+      raw === "turno 2" ||
+      raw === "treino 2" ||
+      raw === "fase 2" ||
+      raw.includes("treino 2") ||
+      raw.includes("turno 2") ||
+      raw === "tarde"
+    ){
+      return "Tarde";
     }
 
-    .title-wrap p{
-      margin:8px 0 0;
-      color:var(--muted);
-      font-size:14px;
+    return raw ? raw : "";
+  }
+
+  function getDateLabel(row){
+    const date = formatDateBR(row["Carimbo de data/hora"] || row["Data"] || "");
+    const shift = getShiftLabel(row);
+    return shift ? `${date} • ${shift}` : date;
+  }
+
+  function getPhase(row){
+    return String(
+      row["Fase"] ||
+      row["FASE"] ||
+      row["fase"] ||
+      row["Etapa"] ||
+      row["ETAPA"] ||
+      ""
+    ).trim();
+  }
+
+  function destroyChart(name){
+    if(charts[name]){
+      charts[name].destroy();
+      charts[name] = null;
     }
-
-    .filters{
-      display:flex;
-      gap:12px;
-      flex-wrap:wrap;
-    }
-
-    select{
-      background:#fff;
-      border:1px solid var(--border);
-      padding:11px 14px;
-      border-radius:12px;
-      color:var(--text);
-      font-size:14px;
-      min-width:190px;
-      box-shadow:0 3px 10px rgba(15,23,42,0.03);
-      outline:none;
-    }
-
-    .top-grid{
-      display:grid;
-      grid-template-columns:repeat(2,1fr);
-      gap:16px;
-      margin-bottom:20px;
-    }
-
-    .kpi{
-      background:var(--panel);
-      border:1px solid var(--border);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      padding:18px;
-    }
-
-    .kpi.clickable{
-      cursor:pointer;
-      transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
-    }
-
-    .kpi.clickable:hover{
-      transform:translateY(-2px);
-      box-shadow:0 14px 34px rgba(15,23,42,0.08);
-      border-color:#cbd5e1;
-    }
-
-    .kpi-label{
-      font-size:13px;
-      color:var(--muted);
-      margin-bottom:8px;
-      font-weight:600;
-    }
-
-    .kpi-value{
-      font-size:30px;
-      font-weight:800;
-      letter-spacing:-0.02em;
-    }
-
-    .kpi-sub{
-      margin-top:6px;
-      font-size:12px;
-      color:var(--muted);
-    }
-
-    .layout{
-      display:grid;
-      grid-template-columns:1.6fr 1fr;
-      gap:20px;
-      align-items:start;
-      margin-bottom:20px;
-    }
-
-    .stack{
-      display:grid;
-      gap:20px;
-    }
-
-    .card{
-      background:var(--panel);
-      border:1px solid var(--border);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow);
-      padding:20px;
-    }
-
-    .card-header{
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:12px;
-      margin-bottom:14px;
-      flex-wrap:wrap;
-    }
-
-    .card-title{
-      font-size:16px;
-      font-weight:700;
-      letter-spacing:-0.01em;
-    }
-
-    .card-subtitle{
-      color:var(--muted);
-      font-size:12px;
-    }
-
-    .badge{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      padding:6px 10px;
-      border-radius:999px;
-      font-size:12px;
-      font-weight:700;
-      background:var(--panel-soft);
-      border:1px solid var(--border);
-      color:var(--muted);
-    }
-
-    .mini-grid{
-      display:grid;
-      grid-template-columns:repeat(4,1fr);
-      gap:14px;
-    }
-
-    .metric{
-      background:var(--panel-soft);
-      border:1px solid var(--border);
-      border-radius:14px;
-      padding:18px;
-      text-align:center;
-    }
-
-    .metric-value{
-      font-size:26px;
-      font-weight:800;
-    }
-
-    .metric-label{
-      font-size:13px;
-      color:var(--muted);
-      margin-top:6px;
-      font-weight:600;
-    }
-
-    .heatmap{
-      display:grid;
-      gap:10px;
-    }
-
-    .heat-header{
-      display:grid;
-      grid-template-columns:1.2fr repeat(5, 44px);
-      align-items:center;
-      gap:8px;
-      margin-bottom:2px;
-    }
-
-    .heat-header-spacer{
-      font-size:12px;
-      font-weight:700;
-      color:var(--muted);
-    }
-
-    .heat-header-label{
-      height:28px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      border-radius:8px;
-      background:#eef2f7;
-      color:#334155;
-      font-size:11px;
-      font-weight:800;
-      border:1px solid var(--border);
-    }
-
-    .heat-row{
-      display:grid;
-      grid-template-columns:1.2fr repeat(5, 44px);
-      align-items:center;
-      gap:8px;
-    }
-
-    .heat-name{
-      font-size:13px;
-      font-weight:600;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
-
-    .heat-cell{
-      height:34px;
-      border-radius:10px;
-      border:1px solid rgba(255,255,255,0.3);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size:11px;
-      font-weight:700;
-      color:#0f172a;
-    }
-
-    .legend{
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-      margin-top:10px;
-    }
-
-    .legend span{
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      font-size:12px;
-      color:var(--muted);
-      font-weight:600;
-    }
-
-    .dot{
-      width:12px;
-      height:12px;
-      border-radius:999px;
-      display:inline-block;
-    }
-
-    .charts-grid{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:20px;
-    }
-
-    canvas{
-      width:100% !important;
-      height:390px !important;
-    }
-
-    #wellnessChart{height:460px !important;}
-    #cmjPhaseChart,
-    #sjPhaseChart,
-    #mbPhaseChart,
-    #vo2Chart,
-    #bodyCompChart{height:320px !important;}
-
-    .modal-overlay{
-      position:fixed;
-      inset:0;
-      background:rgba(15,23,42,0.5);
-      display:none;
-      align-items:center;
-      justify-content:center;
-      padding:20px;
-      z-index:1000;
-    }
-
-    .modal-overlay.show{display:flex}
-
-    .modal{
-      width:min(760px, 100%);
-      max-height:85vh;
-      overflow:auto;
-      background:var(--panel);
-      border:1px solid var(--border);
-      border-radius:20px;
-      box-shadow:0 24px 60px rgba(15,23,42,0.25);
-      padding:22px;
-    }
-
-    .modal-header{
-      display:flex;
-      justify-content:space-between;
-      align-items:flex-start;
-      gap:16px;
-      margin-bottom:16px;
-    }
-
-    .modal-title{
-      font-size:20px;
-      font-weight:800;
-      margin:0;
-    }
-
-    .modal-subtitle{
-      margin-top:4px;
-      color:var(--muted);
-      font-size:13px;
-    }
-
-    .modal-close{
-      border:none;
-      background:#eef2f7;
-      color:#334155;
-      width:38px;
-      height:38px;
-      border-radius:12px;
-      font-size:20px;
-      cursor:pointer;
-      font-weight:700;
-    }
-
-    .modal-list{
-      display:grid;
-      gap:12px;
-    }
-
-    .modal-alert-item{
-      border:1px solid #fecaca;
-      background:#fff7f7;
-      border-radius:14px;
-      padding:14px 16px;
-    }
-
-    .modal-alert-name{
-      font-weight:800;
-      font-size:15px;
-      margin-bottom:8px;
-      color:#7f1d1d;
-    }
-
-    .modal-alert-criteria{
-      display:flex;
-      flex-wrap:wrap;
-      gap:8px;
-    }
-
-    .criterion-tag{
-      display:inline-flex;
-      align-items:center;
-      padding:6px 10px;
-      border-radius:999px;
-      background:#fee2e2;
-      color:#991b1b;
-      font-size:12px;
-      font-weight:700;
-      border:1px solid #fecaca;
-    }
-
-    .modal-empty{
-      padding:14px 16px;
-      border-radius:14px;
-      background:#f0fdf4;
-      border:1px solid #bbf7d0;
-      color:#166534;
-      font-weight:700;
-    }
-
-    @media (max-width: 1250px){
-      .layout{grid-template-columns:1fr}
-      .top-grid{grid-template-columns:1fr}
-      .charts-grid{grid-template-columns:1fr}
-    }
-
-    @media (max-width: 760px){
-      body{padding:16px}
-      .mini-grid{grid-template-columns:1fr 1fr}
-      .filters{width:100%}
-      select{width:100%}
-      .heat-header,
-      .heat-row{grid-template-columns:1fr repeat(5, 38px)}
-      canvas{height:320px !important}
-    }
-
-    @media (max-width: 540px){
-      .mini-grid{grid-template-columns:1fr}
-    }
-  </style>
-</head>
-
-<body>
-  <div class="container">
-
-    <div class="header">
-      <div class="title-wrap">
-        <h1>Smart Training</h1>
-        <p>Monitoramento de wellness, carga interna, prontidão e performance</p>
-      </div>
-
-      <div class="filters">
-        <select id="teamFilter">
-          <option value="Todas">Todas as Equipes</option>
-          <option value="15">Sub 15</option>
-          <option value="18">Sub 18</option>
-          <option value="21">Sub 21</option>
-          <option value="24">Sub 24</option>
-        </select>
-
-        <select id="athleteFilter">
-          <option value="Equipe">Equipe (Todos)</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="top-grid">
-      <div class="kpi" id="kpiAthletesCard">
-        <div class="kpi-label">Atletas monitorados</div>
-        <div class="kpi-value" id="kpiAthletes">0</div>
-        <div class="kpi-sub">atletas com dados no filtro atual</div>
-      </div>
-
-      <div class="kpi clickable" id="kpiAlertsCard" title="Clique para ver os atletas em alerta">
-        <div class="kpi-label">Atletas em alerta</div>
-        <div class="kpi-value" id="kpiAlerts">0</div>
-        <div class="kpi-sub">clique para ver atletas e critérios</div>
-      </div>
-    </div>
-
-    <div class="layout">
-      <div class="stack">
-        <div class="card">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Wellness Diário + Carga de Treino</div>
-              <div class="card-subtitle">No modo equipe: média da manhã (treino 1) e média da tarde (treino 2) de cada dia</div>
-            </div>
-            <div class="badge">Zona ideal: 7–10</div>
-          </div>
-          <canvas id="wellnessChart"></canvas>
-        </div>
-
-        <div class="card" id="perfilSection" style="display:none">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Perfil do Atleta</div>
-              <div class="card-subtitle">Últimos valores disponíveis</div>
-            </div>
-          </div>
-
-          <div class="mini-grid">
-            <div class="metric">
-              <div id="cmjMetric" class="metric-value">-</div>
-              <div class="metric-label">CMJ</div>
-            </div>
-            <div class="metric">
-              <div id="sjMetric" class="metric-value">-</div>
-              <div class="metric-label">Squat Jump</div>
-            </div>
-            <div class="metric">
-              <div id="mbMetric" class="metric-value">-</div>
-              <div class="metric-label">Arremesso</div>
-            </div>
-            <div class="metric">
-              <div id="vo2Metric" class="metric-value">-</div>
-              <div class="metric-label">VO2max</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="charts-grid" id="athleteChartsSection" style="display:none">
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <div class="card-title">CMJ por Fase</div>
-                <div class="card-subtitle">Valores absolutos por fase</div>
-              </div>
-            </div>
-            <canvas id="cmjPhaseChart"></canvas>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <div class="card-title">Squat Jump por Fase</div>
-                <div class="card-subtitle">Valores absolutos por fase</div>
-              </div>
-            </div>
-            <canvas id="sjPhaseChart"></canvas>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <div class="card-title">Força Explosiva de Membros Superiores</div>
-                <div class="card-subtitle">Média dos arremessos da avaliação da fase</div>
-              </div>
-            </div>
-            <canvas id="mbPhaseChart"></canvas>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <div class="card-title">VO2max</div>
-                <div class="card-subtitle">Valores absolutos por fase</div>
-              </div>
-            </div>
-            <canvas id="vo2Chart"></canvas>
-          </div>
-
-          <div class="card" style="grid-column:1 / -1;">
-            <div class="card-header">
-              <div>
-                <div class="card-title">Composição Corporal por Fase</div>
-                <div class="card-subtitle">1 avaliação por fase, sem divisão dos valores</div>
-              </div>
-            </div>
-            <canvas id="bodyCompChart"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <div class="stack">
-        <div class="card" id="heatmapCard">
-          <div class="card-header">
-            <div>
-              <div class="card-title">Heatmap de Prontidão</div>
-              <div class="card-subtitle">Atletas com pelo menos um dado válido</div>
-            </div>
-          </div>
-
-          <div class="heat-header">
-            <div class="heat-header-spacer">Atleta</div>
-            <div class="heat-header-label">REC</div>
-            <div class="heat-header-label">SON</div>
-            <div class="heat-header-label">FAD</div>
-            <div class="heat-header-label">EST</div>
-            <div class="heat-header-label">DOR</div>
-          </div>
-
-          <div class="heatmap" id="heatmap"></div>
-
-          <div class="legend">
-            <span><i class="dot" style="background:#fecaca"></i> Baixo</span>
-            <span><i class="dot" style="background:#fde68a"></i> Moderado</span>
-            <span><i class="dot" style="background:#bbf7d0"></i> Adequado</span>
-          </div>
-
-          <div class="legend">
-            <span>REC = Recuperação</span>
-            <span>SON = Sono</span>
-            <span>FAD = Fadiga</span>
-            <span>EST = Estresse</span>
-            <span>DOR = Dor</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <div class="modal-overlay" id="alertsModal">
-    <div class="modal">
-      <div class="modal-header">
-        <div>
-          <h2 class="modal-title">Atletas em Alerta</h2>
-          <div class="modal-subtitle">Registro mais recente válido de cada atleta no filtro atual</div>
-        </div>
-        <button class="modal-close" id="closeAlertsModal" type="button">&times;</button>
-      </div>
-
-      <div class="modal-list" id="alertsModalList"></div>
-    </div>
-  </div>
-
-  <script>
-    const MONITORAMENTO_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2zqGesxYsRhgphN6dpzLhoCCHk54JzzXT7PEFYhLni7uegkBTxRrj8_q3ZzJdN9P77Uum8C078cD8/pub?gid=1108601119&single=true&output=csv";
-    const DESEMPENHO_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2zqGesxYsRhgphN6dpzLhoCCHk54JzzXT7PEFYhLni7uegkBTxRrj8_q3ZzJdN9P77Uum8C078cD8/pub?gid=1791609294&single=true&output=csv";
-    const COMPOSICAO_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2zqGesxYsRhgphN6dpzLhoCCHk54JzzXT7PEFYhLni7uegkBTxRrj8_q3ZzJdN9P77Uum8C078cD8/pub?gid=1621298071&single=true&output=csv";
-
-    let monitoramentoData = [];
-    let desempenhoData = [];
-    let composicaoData = [];
-    let charts = {};
-    let currentAlertsData = [];
-
-    function safe(v){
-      if(v === null || v === undefined || String(v).trim() === "") return 0;
-      const n = Number(String(v).replace(",", "."));
-      return isNaN(n) ? 0 : n;
-    }
-
-    function safeNullable(v){
-      if(v === null || v === undefined || String(v).trim() === "") return null;
-      const n = Number(String(v).replace(",", "."));
-      return isNaN(n) ? null : n;
-    }
-
-    function fmtMetric(v){
-      const n = safe(v);
-      return n ? n.toFixed(2) : "-";
-    }
-
-    function averageOrNull(arr){
-      const valid = arr.filter(v => v !== null && v !== undefined && !isNaN(v));
-      if(!valid.length) return null;
-      return valid.reduce((a,b)=>a+b,0) / valid.length;
-    }
-
-    function getName(row){
-      return String(
-        row["Nome"] ||
-        row["NOME"] ||
-        row["Atleta"] ||
-        row["ATLETA"] ||
-        row["atleta"] ||
-        ""
-      ).trim();
-    }
-
-    function getTeam(name){
-      if(!name) return "";
-      const parts = String(name).trim().split(" ");
-      return parts[parts.length - 1];
-    }
-
-    function getTimestampFromAnyDate(raw){
-      if(!raw) return 0;
-
-      const s = String(raw).trim();
-      if(!s) return 0;
-
-      const [datePart, timePart = "00:00:00"] = s.split(" ");
-      const d = datePart.split("/");
-
-      if(d.length === 3){
-        const day = d[0].padStart(2, "0");
-        const month = d[1].padStart(2, "0");
-        const year = d[2];
-        return new Date(`${year}-${month}-${day}T${timePart}`).getTime();
+  }
+
+  function destroyAthleteCharts(){
+    destroyChart("cmjPhaseChart");
+    destroyChart("sjPhaseChart");
+    destroyChart("mbPhaseChart");
+    destroyChart("vo2Chart");
+    destroyChart("bodyCompChart");
+  }
+
+  function resetAthleteMetrics(){
+    document.getElementById("cmjMetric").innerText = "-";
+    document.getElementById("sjMetric").innerText = "-";
+    document.getElementById("mbMetric").innerText = "-";
+    document.getElementById("vo2Metric").innerText = "-";
+  }
+
+  function getFilteredMonitoramentoData(){
+    const team = document.getElementById("teamFilter").value;
+    const athlete = document.getElementById("athleteFilter").value;
+
+    return monitoramentoData.filter(d => rowMatchesTeam(d, team) && rowMatchesAthlete(d, athlete));
+  }
+
+  function getFilteredDesempenhoData(){
+    const team = document.getElementById("teamFilter").value;
+    const athlete = document.getElementById("athleteFilter").value;
+
+    return desempenhoData.filter(d => rowMatchesTeam(d, team) && rowMatchesAthlete(d, athlete));
+  }
+
+  function getFilteredComposicaoData(){
+    const team = document.getElementById("teamFilter").value;
+    const athlete = document.getElementById("athleteFilter").value;
+
+    return composicaoData.filter(d => rowMatchesTeam(d, team) && rowMatchesAthlete(d, athlete));
+  }
+
+  function getAthletesFromData(data){
+    return [...new Set(data.map(d => getName(d)).filter(Boolean))].sort((a,b)=>a.localeCompare(b, "pt-BR"));
+  }
+
+  function getLatestRowByAthlete(data){
+    const athletes = getAthletesFromData(data);
+    const result = [];
+
+    athletes.forEach(name => {
+      const rows = sortByTimestamp(data.filter(r => normalizeText(getName(r)) === normalizeText(name)));
+      const last = rows[rows.length - 1];
+      if(last) result.push(last);
+    });
+
+    return result;
+  }
+
+  function getHeatmapEligibleRows(data){
+    const latestRows = getLatestRowByAthlete(data);
+
+    return latestRows.filter(row => {
+      const vals = [
+        safeNullable(row["RECUPERAÇÃO"]),
+        safeNullable(row["SONO"]),
+        safeNullable(row["FADIGA"]),
+        safeNullable(row["ESTRESSE"]),
+        safeNullable(row["DOR"])
+      ];
+      return vals.some(v => v !== null);
+    });
+  }
+
+  function getReadinessColor(v){
+    if(v < 4) return "#fecaca";
+    if(v < 7) return "#fde68a";
+    return "#bbf7d0";
+  }
+
+  function getTrainingLoad(row){
+    const esforco = safeNullable(row["ESFORÇO"]);
+    const tempo = safeNullable(
+      row["TEMPO SESSÃO"] ||
+      row["TEMPO DA SESSÃO"] ||
+      row["TEMPO SESSAO"] ||
+      row["DURAÇÃO"] ||
+      row["DURACAO"] ||
+      row["TEMPO"]
+    );
+    if(esforco === null || tempo === null) return null;
+    return esforco * tempo;
+  }
+
+  function getVO2(row){
+    return safe(
+      row["VO2MAX"] ||
+      row["VO2 MAX"] ||
+      row["VO₂MAX"] ||
+      row["VO2"] ||
+      row["VO2máx"] ||
+      row["VO2 MÁX"] ||
+      row["VO2 Max"] ||
+      row["VO2max"]
+    );
+  }
+
+  function getPeso(row){
+    return safe(
+      row["PESO"] ||
+      row["Peso"] ||
+      row["MASSA CORPORAL"] ||
+      row["Massa corporal"]
+    );
+  }
+
+  function getPctG(row){
+    return safe(
+      row["%G"] ||
+      row["% G"] ||
+      row["PERCENTUAL DE GORDURA"] ||
+      row["% DE GORDURA"] ||
+      row["GORDURA %"] ||
+      row["Percentual de gordura"]
+    );
+  }
+
+  function getMassaGorda(row){
+    return safe(
+      row["MASSA GORDA"] ||
+      row["Massa gorda"] ||
+      row["Massa Gorda"] ||
+      row["KG GORDURA"] ||
+      row["GORDURA KG"] ||
+      row["Massa gorda (kg)"] ||
+      row["Gordura (kg)"]
+    );
+  }
+
+  function getMassaMagra(row){
+    return safe(
+      row["MASSA MAGRA"] ||
+      row["Massa magra"] ||
+      row["Massa Magra"] ||
+      row["MM"] ||
+      row["MASSA LIVRE DE GORDURA"] ||
+      row["MLG"] ||
+      row["Massa magra (kg)"] ||
+      row["Massa livre de gordura"]
+    );
+  }
+
+  function getPctMassaMagra(row){
+    return safe(
+      row["% MASSA MAGRA"] ||
+      row["% DE MASSA MAGRA"] ||
+      row["PERCENTUAL DE MASSA MAGRA"] ||
+      row["MASSA MAGRA %"] ||
+      row["% Massa Magra"] ||
+      row["Percentual de massa magra"]
+    );
+  }
+
+  function getArremesso(row){
+    const a1 = safeNullable(
+      row["Arremesso Medicine Ball 1"] ||
+      row["Arremesso 1"] ||
+      row["Arremesso MB 1"]
+    );
+
+    const a2 = safeNullable(
+      row["Arremesso Medicine Ball 2"] ||
+      row["Arremesso 2"] ||
+      row["Arremesso MB 2"]
+    );
+
+    const a3 = safeNullable(
+      row["Arremesso Medicine Ball 3"] ||
+      row["Arremesso 3"] ||
+      row["Arremesso MB 3"]
+    );
+
+    const mediaDireta = safeNullable(
+      row["Média Arremesso"] ||
+      row["MEDIA ARREMESSO"] ||
+      row["Arremesso"] ||
+      row["ARREMESSO"]
+    );
+
+    const valores = [a1, a2, a3].filter(v => v !== null && !isNaN(v));
+
+    if(valores.length) return valores.reduce((a,b)=>a+b,0) / valores.length;
+    if(mediaDireta !== null) return mediaDireta;
+
+    return 0;
+  }
+
+  function getAbsolutePhaseValue(rows, getter){
+    const valores = rows
+      .map(r => getter(r))
+      .filter(v => v !== null && v !== undefined && !isNaN(v) && v !== 0);
+
+    if(!valores.length) return 0;
+    return valores[valores.length - 1];
+  }
+
+  function baseChartOptions(yMin = 0, yMax = 10){
+    return {
+      responsive:true,
+      maintainAspectRatio:false,
+      interaction:{mode:"index", intersect:false},
+      spanGaps:false,
+      plugins:{
+        legend:{
+          labels:{
+            font:{size:13, weight:"600"},
+            usePointStyle:true,
+            pointStyle:"line",
+            color:"#334155"
+          }
+        },
+        tooltip:{
+          backgroundColor:"rgba(15,23,42,0.92)",
+          titleFont:{weight:"700"},
+          bodyFont:{weight:"600"},
+          padding:12,
+          cornerRadius:12
+        }
+      },
+      scales:{
+        x:{
+          ticks:{
+            color:"#475569",
+            maxRotation:45,
+            minRotation:45,
+            autoSkip:true,
+            maxTicksLimit:18,
+            font:{size:11, weight:"600"}
+          },
+          grid:{color:"rgba(148,163,184,0.12)"}
+        },
+        y:{
+          min:yMin,
+          max:yMax,
+          ticks:{
+            color:"#475569",
+            font:{size:11, weight:"600"}
+          },
+          grid:{color:"rgba(148,163,184,0.12)"}
+        }
       }
+    };
+  }
 
-      const iso = new Date(s).getTime();
-      return isNaN(iso) ? 0 : iso;
-    }
+  function drawWellness(labels, rec, rpe, sleep, fad, est, dor, loadData){
+    destroyChart("wellnessChart");
 
-    function getDateTimeValue(row){
-      return getTimestampFromAnyDate(
-        row["Carimbo de data/hora"] ||
-        row["Data"] ||
-        row["DATA"] ||
-        row["data"] ||
-        ""
-      );
-    }
-
-    function sortByTimestamp(data){
-      return [...data].sort((a,b) => getDateTimeValue(a) - getDateTimeValue(b));
-    }
-
-    function formatDateBR(dateString){
-      if(!dateString) return "";
-      const onlyDate = String(dateString).split(" ")[0];
-      const parts = onlyDate.split("/");
-      if(parts.length === 3){
-        return `${parts[0]}/${parts[1]}`;
-      }
-      return onlyDate;
-    }
-
-    function getShiftLabel(row){
-      const raw = String(
-        row["Turno"] ||
-        row["TREINO"] ||
-        row["Treino"] ||
-        row["treino"] ||
-        row["Fase"] ||
-        ""
-      ).trim().toLowerCase();
-
-      if(
-        raw === "1" ||
-        raw === "turno 1" ||
-        raw === "treino 1" ||
-        raw === "fase 1" ||
-        raw.includes("treino 1") ||
-        raw.includes("turno 1") ||
-        raw === "manhã" ||
-        raw === "manha"
-      ){
-        return "Manhã";
-      }
-
-      if(
-        raw === "2" ||
-        raw === "turno 2" ||
-        raw === "treino 2" ||
-        raw === "fase 2" ||
-        raw.includes("treino 2") ||
-        raw.includes("turno 2") ||
-        raw === "tarde"
-      ){
-        return "Tarde";
-      }
-
-      return raw ? raw : "";
-    }
-
-    function getDateLabel(row){
-      const date = formatDateBR(row["Carimbo de data/hora"] || row["Data"] || "");
-      const shift = getShiftLabel(row);
-      return shift ? `${date} • ${shift}` : date;
-    }
-
-    function getPhase(row){
-      return String(
-        row["Fase"] ||
-        row["FASE"] ||
-        row["fase"] ||
-        row["Etapa"] ||
-        row["ETAPA"] ||
-        ""
-      ).trim();
-    }
-
-    function destroyChart(name){
-      if(charts[name]){
-        charts[name].destroy();
-        charts[name] = null;
-      }
-    }
-
-    function destroyAthleteCharts(){
-      destroyChart("cmjPhaseChart");
-      destroyChart("sjPhaseChart");
-      destroyChart("mbPhaseChart");
-      destroyChart("vo2Chart");
-      destroyChart("bodyCompChart");
-    }
-
-    function resetAthleteMetrics(){
-      document.getElementById("cmjMetric").innerText = "-";
-      document.getElementById("sjMetric").innerText = "-";
-      document.getElementById("mbMetric").innerText = "-";
-      document.getElementById("vo2Metric").innerText = "-";
-    }
-
-    function getFilteredMonitoramentoData(){
-      const team = document.getElementById("teamFilter").value;
-      const athlete = document.getElementById("athleteFilter").value;
-
-      let data = [...monitoramentoData];
-
-      if(team !== "Todas"){
-        data = data.filter(d => getTeam(getName(d)) === team);
-      }
-
-      if(athlete !== "Equipe"){
-        data = data.filter(d => getName(d) === athlete);
-      }
-
-      return data;
-    }
-
-    function getFilteredDesempenhoData(){
-      const team = document.getElementById("teamFilter").value;
-      const athlete = document.getElementById("athleteFilter").value;
-
-      let data = [...desempenhoData];
-
-      if(team !== "Todas"){
-        data = data.filter(d => getTeam(getName(d)) === team);
-      }
-
-      if(athlete !== "Equipe"){
-        data = data.filter(d => getName(d) === athlete);
-      }
-
-      return data;
-    }
-
-    function getFilteredComposicaoData(){
-      const team = document.getElementById("teamFilter").value;
-      const athlete = document.getElementById("athleteFilter").value;
-
-      let data = [...composicaoData];
-
-      if(team !== "Todas"){
-        data = data.filter(d => getTeam(getName(d)) === team);
-      }
-
-      if(athlete !== "Equipe"){
-        data = data.filter(d => getName(d) === athlete);
-      }
-
-      return data;
-    }
-
-    function getAthletesFromData(data){
-      return [...new Set(data.map(d => getName(d)).filter(Boolean))].sort();
-    }
-
-    function getLatestRowByAthlete(data){
-      const athletes = getAthletesFromData(data);
-      const result = [];
-
-      athletes.forEach(name => {
-        const rows = sortByTimestamp(data.filter(r => getName(r) === name));
-        const last = rows[rows.length - 1];
-        if(last) result.push(last);
-      });
-
-      return result;
-    }
-
-    function getHeatmapEligibleRows(data){
-      const latestRows = getLatestRowByAthlete(data);
-
-      return latestRows.filter(row => {
-        const vals = [
-          safeNullable(row["RECUPERAÇÃO"]),
-          safeNullable(row["SONO"]),
-          safeNullable(row["FADIGA"]),
-          safeNullable(row["ESTRESSE"]),
-          safeNullable(row["DOR"])
-        ];
-        return vals.some(v => v !== null);
-      });
-    }
-
-    function getReadinessColor(v){
-      if(v < 4) return "#fecaca";
-      if(v < 7) return "#fde68a";
-      return "#bbf7d0";
-    }
-
-    function getTrainingLoad(row){
-      const esforco = safeNullable(row["ESFORÇO"]);
-      const tempo = safeNullable(
-        row["TEMPO SESSÃO"] ||
-        row["TEMPO DA SESSÃO"] ||
-        row["TEMPO SESSAO"] ||
-        row["DURAÇÃO"] ||
-        row["DURACAO"] ||
-        row["TEMPO"]
-      );
-      if(esforco === null || tempo === null) return null;
-      return esforco * tempo;
-    }
-
-    function getVO2(row){
-      return safe(
-        row["VO2MAX"] ||
-        row["VO2 MAX"] ||
-        row["VO₂MAX"] ||
-        row["VO2"] ||
-        row["VO2máx"] ||
-        row["VO2 MÁX"] ||
-        row["VO2 Max"] ||
-        row["VO2max"]
-      );
-    }
-
-    function getPeso(row){
-      return safe(
-        row["PESO"] ||
-        row["Peso"] ||
-        row["MASSA CORPORAL"] ||
-        row["Massa corporal"]
-      );
-    }
-
-    function getPctG(row){
-      return safe(
-        row["%G"] ||
-        row["% G"] ||
-        row["PERCENTUAL DE GORDURA"] ||
-        row["% DE GORDURA"] ||
-        row["GORDURA %"] ||
-        row["Percentual de gordura"]
-      );
-    }
-
-    function getMassaGorda(row){
-      return safe(
-        row["MASSA GORDA"] ||
-        row["Massa gorda"] ||
-        row["Massa Gorda"] ||
-        row["KG GORDURA"] ||
-        row["GORDURA KG"] ||
-        row["Massa gorda (kg)"] ||
-        row["Gordura (kg)"]
-      );
-    }
-
-    function getMassaMagra(row){
-      return safe(
-        row["MASSA MAGRA"] ||
-        row["Massa magra"] ||
-        row["Massa Magra"] ||
-        row["MM"] ||
-        row["MASSA LIVRE DE GORDURA"] ||
-        row["MLG"] ||
-        row["Massa magra (kg)"] ||
-        row["Massa livre de gordura"]
-      );
-    }
-
-    function getPctMassaMagra(row){
-      return safe(
-        row["% MASSA MAGRA"] ||
-        row["% DE MASSA MAGRA"] ||
-        row["PERCENTUAL DE MASSA MAGRA"] ||
-        row["MASSA MAGRA %"] ||
-        row["% Massa Magra"] ||
-        row["Percentual de massa magra"]
-      );
-    }
-
-    function getArremesso(row){
-      const a1 = safeNullable(
-        row["Arremesso Medicine Ball 1"] ||
-        row["Arremesso 1"] ||
-        row["Arremesso MB 1"]
-      );
-
-      const a2 = safeNullable(
-        row["Arremesso Medicine Ball 2"] ||
-        row["Arremesso 2"] ||
-        row["Arremesso MB 2"]
-      );
-
-      const a3 = safeNullable(
-        row["Arremesso Medicine Ball 3"] ||
-        row["Arremesso 3"] ||
-        row["Arremesso MB 3"]
-      );
-
-      const mediaDireta = safeNullable(
-        row["Média Arremesso"] ||
-        row["MEDIA ARREMESSO"] ||
-        row["Arremesso"] ||
-        row["ARREMESSO"]
-      );
-
-      const valores = [a1, a2, a3].filter(v => v !== null && !isNaN(v));
-
-      if(valores.length) return valores.reduce((a,b)=>a+b,0) / valores.length;
-      if(mediaDireta !== null) return mediaDireta;
-
-      return 0;
-    }
-
-    function getAbsolutePhaseValue(rows, getter){
-      const valores = rows
-        .map(r => getter(r))
-        .filter(v => v !== null && v !== undefined && !isNaN(v) && v !== 0);
-
-      if(!valores.length) return 0;
-      return valores[valores.length - 1];
-    }
-
-    function baseChartOptions(yMin = 0, yMax = 10){
-      return {
+    charts.wellnessChart = new Chart(document.getElementById("wellnessChart"), {
+      data:{
+        labels,
+        datasets:[
+          {
+            type:"bar",
+            label:"Carga de treino",
+            data:loadData,
+            yAxisID:"y1",
+            backgroundColor:"rgba(37,99,235,0.18)",
+            borderColor:"rgba(37,99,235,0.55)",
+            borderWidth:1,
+            borderRadius:6
+          },
+          {
+            type:"line",
+            label:"Recuperação",
+            data:rec,
+            borderColor:"#16a34a",
+            backgroundColor:"#16a34a",
+            tension:0.35,
+            borderWidth:3,
+            pointRadius:3,
+            yAxisID:"y"
+          },
+          {
+            type:"line",
+            label:"Esforço",
+            data:rpe,
+            borderColor:"#f59e0b",
+            backgroundColor:"#f59e0b",
+            tension:0.35,
+            borderWidth:3,
+            pointRadius:3,
+            yAxisID:"y"
+          },
+          {
+            type:"line",
+            label:"Sono",
+            data:sleep,
+            borderColor:"#2563eb",
+            backgroundColor:"#2563eb",
+            tension:0.35,
+            borderWidth:3,
+            pointRadius:3,
+            yAxisID:"y"
+          },
+          {
+            type:"line",
+            label:"Fadiga",
+            data:fad,
+            borderColor:"#f97316",
+            backgroundColor:"#f97316",
+            tension:0.35,
+            borderWidth:3,
+            pointRadius:3,
+            yAxisID:"y"
+          },
+          {
+            type:"line",
+            label:"Estresse",
+            data:est,
+            borderColor:"#dc2626",
+            backgroundColor:"#dc2626",
+            tension:0.35,
+            borderWidth:3,
+            pointRadius:3,
+            yAxisID:"y"
+          },
+          {
+            type:"line",
+            label:"Dor",
+            data:dor,
+            borderColor:"#7c3aed",
+            backgroundColor:"#7c3aed",
+            tension:0.35,
+            borderWidth:3,
+            pointRadius:3,
+            yAxisID:"y"
+          }
+        ]
+      },
+      options:{
         responsive:true,
         maintainAspectRatio:false,
         interaction:{mode:"index", intersect:false},
@@ -1014,8 +532,6 @@
           legend:{
             labels:{
               font:{size:13, weight:"600"},
-              usePointStyle:true,
-              pointStyle:"line",
               color:"#334155"
             }
           },
@@ -1025,6 +541,13 @@
             bodyFont:{weight:"600"},
             padding:12,
             cornerRadius:12
+          },
+          annotation:{
+            annotations:{
+              critical:{ type:"box", yMin:0, yMax:6, backgroundColor:"rgba(220,38,38,0.08)", borderWidth:0 },
+              alert:{ type:"box", yMin:6, yMax:7, backgroundColor:"rgba(245,158,11,0.10)", borderWidth:0 },
+              ideal:{ type:"box", yMin:7, yMax:10, backgroundColor:"rgba(34,197,94,0.10)", borderWidth:0 }
+            }
           }
         },
         scales:{
@@ -1040,752 +563,521 @@
             grid:{color:"rgba(148,163,184,0.12)"}
           },
           y:{
-            min:yMin,
-            max:yMax,
-            ticks:{
-              color:"#475569",
-              font:{size:11, weight:"600"}
-            },
+            position:"left",
+            min:0,
+            max:10,
+            ticks:{ color:"#475569", font:{size:11, weight:"600"} },
             grid:{color:"rgba(148,163,184,0.12)"}
-          }
-        }
-      };
-    }
-
-    function drawWellness(labels, rec, rpe, sleep, fad, est, dor, loadData){
-      destroyChart("wellnessChart");
-
-      charts.wellnessChart = new Chart(document.getElementById("wellnessChart"), {
-        data:{
-          labels,
-          datasets:[
-            {
-              type:"bar",
-              label:"Carga de treino",
-              data:loadData,
-              yAxisID:"y1",
-              backgroundColor:"rgba(37,99,235,0.18)",
-              borderColor:"rgba(37,99,235,0.55)",
-              borderWidth:1,
-              borderRadius:6
-            },
-            {
-              type:"line",
-              label:"Recuperação",
-              data:rec,
-              borderColor:"#16a34a",
-              backgroundColor:"#16a34a",
-              tension:0.35,
-              borderWidth:3,
-              pointRadius:3,
-              yAxisID:"y"
-            },
-            {
-              type:"line",
-              label:"Esforço",
-              data:rpe,
-              borderColor:"#f59e0b",
-              backgroundColor:"#f59e0b",
-              tension:0.35,
-              borderWidth:3,
-              pointRadius:3,
-              yAxisID:"y"
-            },
-            {
-              type:"line",
-              label:"Sono",
-              data:sleep,
-              borderColor:"#2563eb",
-              backgroundColor:"#2563eb",
-              tension:0.35,
-              borderWidth:3,
-              pointRadius:3,
-              yAxisID:"y"
-            },
-            {
-              type:"line",
-              label:"Fadiga",
-              data:fad,
-              borderColor:"#f97316",
-              backgroundColor:"#f97316",
-              tension:0.35,
-              borderWidth:3,
-              pointRadius:3,
-              yAxisID:"y"
-            },
-            {
-              type:"line",
-              label:"Estresse",
-              data:est,
-              borderColor:"#dc2626",
-              backgroundColor:"#dc2626",
-              tension:0.35,
-              borderWidth:3,
-              pointRadius:3,
-              yAxisID:"y"
-            },
-            {
-              type:"line",
-              label:"Dor",
-              data:dor,
-              borderColor:"#7c3aed",
-              backgroundColor:"#7c3aed",
-              tension:0.35,
-              borderWidth:3,
-              pointRadius:3,
-              yAxisID:"y"
-            }
-          ]
-        },
-        options:{
-          responsive:true,
-          maintainAspectRatio:false,
-          interaction:{mode:"index", intersect:false},
-          spanGaps:false,
-          plugins:{
-            legend:{
-              labels:{
-                font:{size:13, weight:"600"},
-                color:"#334155"
-              }
-            },
-            tooltip:{
-              backgroundColor:"rgba(15,23,42,0.92)",
-              titleFont:{weight:"700"},
-              bodyFont:{weight:"600"},
-              padding:12,
-              cornerRadius:12
-            },
-            annotation:{
-              annotations:{
-                critical:{
-                  type:"box",
-                  yMin:0,
-                  yMax:6,
-                  backgroundColor:"rgba(220,38,38,0.08)",
-                  borderWidth:0
-                },
-                alert:{
-                  type:"box",
-                  yMin:6,
-                  yMax:7,
-                  backgroundColor:"rgba(245,158,11,0.10)",
-                  borderWidth:0
-                },
-                ideal:{
-                  type:"box",
-                  yMin:7,
-                  yMax:10,
-                  backgroundColor:"rgba(34,197,94,0.10)",
-                  borderWidth:0
-                }
-              }
-            }
           },
-          scales:{
-            x:{
-              ticks:{
-                color:"#475569",
-                maxRotation:45,
-                minRotation:45,
-                autoSkip:true,
-                maxTicksLimit:18,
-                font:{size:11, weight:"600"}
-              },
-              grid:{color:"rgba(148,163,184,0.12)"}
-            },
-            y:{
-              position:"left",
-              min:0,
-              max:10,
-              ticks:{
-                color:"#475569",
-                font:{size:11, weight:"600"}
-              },
-              grid:{color:"rgba(148,163,184,0.12)"}
-            },
-            y1:{
-              position:"right",
-              beginAtZero:true,
-              ticks:{
-                color:"#64748b",
-                font:{size:11, weight:"600"}
-              },
-              grid:{drawOnChartArea:false}
-            }
+          y1:{
+            position:"right",
+            beginAtZero:true,
+            ticks:{ color:"#64748b", font:{size:11, weight:"600"} },
+            grid:{drawOnChartArea:false}
           }
         }
-      });
-    }
+      }
+    });
+  }
 
-    function drawSinglePhaseBarChart(canvasId, chartName, label, labels, data, color){
-      destroyChart(chartName);
+  function drawSinglePhaseBarChart(canvasId, chartName, label, labels, data, color){
+    destroyChart(chartName);
 
-      charts[chartName] = new Chart(document.getElementById(canvasId), {
-        type:"bar",
-        data:{
-          labels,
-          datasets:[
-            {
-              label,
-              data,
-              backgroundColor:color,
-              borderRadius:8,
-              maxBarThickness:48
-            }
-          ]
-        },
-        options:{
-          ...baseChartOptions(),
-          plugins:{
-            ...baseChartOptions().plugins,
-            legend:{display:false}
-          },
-          scales:{
-            x:{
-              ticks:{color:"#475569", font:{size:11, weight:"600"}},
-              grid:{color:"rgba(148,163,184,0.12)"}
-            },
-            y:{
-              beginAtZero:true,
-              ticks:{color:"#475569", font:{size:11, weight:"600"}},
-              grid:{color:"rgba(148,163,184,0.12)"}
-            }
+    charts[chartName] = new Chart(document.getElementById(canvasId), {
+      type:"bar",
+      data:{
+        labels,
+        datasets:[
+          {
+            label,
+            data,
+            backgroundColor:color,
+            borderRadius:8,
+            maxBarThickness:48
           }
+        ]
+      },
+      options:{
+        ...baseChartOptions(),
+        plugins:{ ...baseChartOptions().plugins, legend:{display:false} },
+        scales:{
+          x:{ ticks:{color:"#475569", font:{size:11, weight:"600"}}, grid:{color:"rgba(148,163,184,0.12)"} },
+          y:{ beginAtZero:true, ticks:{color:"#475569", font:{size:11, weight:"600"}}, grid:{color:"rgba(148,163,184,0.12)"} }
         }
-      });
-    }
+      }
+    });
+  }
 
-    function drawVO2Chart(labels, data){
-      destroyChart("vo2Chart");
+  function drawVO2Chart(labels, data){
+    destroyChart("vo2Chart");
 
-      charts.vo2Chart = new Chart(document.getElementById("vo2Chart"), {
-        type:"line",
-        data:{
-          labels,
-          datasets:[
-            {
-              label:"VO2max",
-              data,
-              borderColor:"#16a34a",
-              backgroundColor:"#16a34a",
-              tension:0.3,
-              borderWidth:3,
-              pointRadius:4,
-              fill:false
-            }
-          ]
-        },
-        options:{
-          ...baseChartOptions(),
-          plugins:{
-            ...baseChartOptions().plugins,
-            legend:{display:false}
-          },
-          scales:{
-            x:{
-              ticks:{color:"#475569", font:{size:11, weight:"600"}},
-              grid:{color:"rgba(148,163,184,0.12)"}
-            },
-            y:{
-              beginAtZero:false,
-              ticks:{color:"#475569", font:{size:11, weight:"600"}},
-              grid:{color:"rgba(148,163,184,0.12)"}
-            }
+    charts.vo2Chart = new Chart(document.getElementById("vo2Chart"), {
+      type:"line",
+      data:{
+        labels,
+        datasets:[
+          {
+            label:"VO2max",
+            data,
+            borderColor:"#16a34a",
+            backgroundColor:"#16a34a",
+            tension:0.3,
+            borderWidth:3,
+            pointRadius:4,
+            fill:false
           }
+        ]
+      },
+      options:{
+        ...baseChartOptions(),
+        plugins:{ ...baseChartOptions().plugins, legend:{display:false} },
+        scales:{
+          x:{ ticks:{color:"#475569", font:{size:11, weight:"600"}}, grid:{color:"rgba(148,163,184,0.12)"} },
+          y:{ beginAtZero:false, ticks:{color:"#475569", font:{size:11, weight:"600"}}, grid:{color:"rgba(148,163,184,0.12)"} }
         }
-      });
-    }
+      }
+    });
+  }
 
-    function drawBodyCompChart(labels, peso, pctG, massaGorda, massaMagra, pctMassaMagra){
-      destroyChart("bodyCompChart");
+  function drawBodyCompChart(labels, peso, pctG, massaGorda, massaMagra, pctMassaMagra){
+    destroyChart("bodyCompChart");
 
-      charts.bodyCompChart = new Chart(document.getElementById("bodyCompChart"), {
-        type:"line",
-        data:{
-          labels,
-          datasets:[
-            {
-              label:"Peso",
-              data:peso,
-              borderColor:"#0f766e",
-              backgroundColor:"#0f766e",
-              tension:0.25,
-              borderWidth:3,
-              pointRadius:3
-            },
-            {
-              label:"%G",
-              data:pctG,
-              borderColor:"#dc2626",
-              backgroundColor:"#dc2626",
-              tension:0.25,
-              borderWidth:3,
-              pointRadius:3
-            },
-            {
-              label:"Massa gorda",
-              data:massaGorda,
-              borderColor:"#f59e0b",
-              backgroundColor:"#f59e0b",
-              tension:0.25,
-              borderWidth:3,
-              pointRadius:3
-            },
-            {
-              label:"Massa magra",
-              data:massaMagra,
-              borderColor:"#2563eb",
-              backgroundColor:"#2563eb",
-              tension:0.25,
-              borderWidth:3,
-              pointRadius:3
-            },
-            {
-              label:"% massa magra",
-              data:pctMassaMagra,
-              borderColor:"#7c3aed",
-              backgroundColor:"#7c3aed",
-              tension:0.25,
-              borderWidth:3,
-              pointRadius:3
-            }
-          ]
-        },
-        options:{
-          ...baseChartOptions(),
-          scales:{
-            x:{
-              ticks:{color:"#475569", font:{size:11, weight:"600"}},
-              grid:{color:"rgba(148,163,184,0.12)"}
-            },
-            y:{
-              beginAtZero:false,
-              ticks:{color:"#475569", font:{size:11, weight:"600"}},
-              grid:{color:"rgba(148,163,184,0.12)"}
-            }
-          }
+    charts.bodyCompChart = new Chart(document.getElementById("bodyCompChart"), {
+      type:"line",
+      data:{
+        labels,
+        datasets:[
+          { label:"Peso", data:peso, borderColor:"#0f766e", backgroundColor:"#0f766e", tension:0.25, borderWidth:3, pointRadius:3 },
+          { label:"%G", data:pctG, borderColor:"#dc2626", backgroundColor:"#dc2626", tension:0.25, borderWidth:3, pointRadius:3 },
+          { label:"Massa gorda", data:massaGorda, borderColor:"#f59e0b", backgroundColor:"#f59e0b", tension:0.25, borderWidth:3, pointRadius:3 },
+          { label:"Massa magra", data:massaMagra, borderColor:"#2563eb", backgroundColor:"#2563eb", tension:0.25, borderWidth:3, pointRadius:3 },
+          { label:"% massa magra", data:pctMassaMagra, borderColor:"#7c3aed", backgroundColor:"#7c3aed", tension:0.25, borderWidth:3, pointRadius:3 }
+        ]
+      },
+      options:{
+        ...baseChartOptions(),
+        scales:{
+          x:{ ticks:{color:"#475569", font:{size:11, weight:"600"}}, grid:{color:"rgba(148,163,184,0.12)"} },
+          y:{ beginAtZero:false, ticks:{color:"#475569", font:{size:11, weight:"600"}}, grid:{color:"rgba(148,163,184,0.12)"} }
         }
-      });
-    }
-
-    function getAlertsDetails(data){
-      const latestRows = getLatestRowByAthlete(data);
-      const alerts = [];
-
-      latestRows.forEach(row => {
-        const issues = [];
-
-        const rec = safeNullable(row["RECUPERAÇÃO"]);
-        const sono = safeNullable(row["SONO"]);
-        const fad = safeNullable(row["FADIGA"]);
-        const est = safeNullable(row["ESTRESSE"]);
-        const dor = safeNullable(row["DOR"]);
-
-        if(rec !== null && rec < 6) issues.push("Recuperação < 6");
-        if(sono !== null && sono < 4) issues.push("Sono < 4");
-        if(fad !== null && fad < 4) issues.push("Fadiga < 4");
-        if(est !== null && est < 4) issues.push("Estresse < 4");
-        if(dor !== null && dor < 4) issues.push("Dor < 4");
-
-        if(issues.length){
-          alerts.push({
-            nome: getName(row),
-            criterios: issues
-          });
-        }
-      });
-
-      return alerts;
-    }
-
-    function updateAlertsKPI(data){
-      currentAlertsData = getAlertsDetails(data);
-      document.getElementById("kpiAlerts").innerText = currentAlertsData.length;
-    }
-
-    function openAlertsModal(){
-      const modal = document.getElementById("alertsModal");
-      const list = document.getElementById("alertsModalList");
-      list.innerHTML = "";
-
-      if(!currentAlertsData.length){
-        list.innerHTML = `<div class="modal-empty">Nenhum atleta em alerta no filtro atual.</div>`;
-      } else {
-        currentAlertsData.forEach(item => {
-          const div = document.createElement("div");
-          div.className = "modal-alert-item";
-
-          const criteriaHtml = item.criterios
-            .map(c => `<span class="criterion-tag">${c}</span>`)
-            .join("");
-
-          div.innerHTML = `
-            <div class="modal-alert-name">${item.nome}</div>
-            <div class="modal-alert-criteria">${criteriaHtml}</div>
-          `;
-          list.appendChild(div);
-        });
       }
+    });
+  }
 
-      modal.classList.add("show");
-    }
+  function getAlertsDetails(data){
+    const latestRows = getLatestRowByAthlete(data);
+    const alerts = [];
 
-    function closeAlertsModal(){
-      document.getElementById("alertsModal").classList.remove("show");
-    }
+    latestRows.forEach(row => {
+      const issues = [];
+      const rec = safeNullable(row["RECUPERAÇÃO"]);
+      const sono = safeNullable(row["SONO"]);
+      const fad = safeNullable(row["FADIGA"]);
+      const est = safeNullable(row["ESTRESSE"]);
+      const dor = safeNullable(row["DOR"]);
 
-    function buildHeatmap(data){
-      const container = document.getElementById("heatmap");
-      container.innerHTML = "";
+      if(rec !== null && rec < 6) issues.push("Recuperação < 6");
+      if(sono !== null && sono < 4) issues.push("Sono < 4");
+      if(fad !== null && fad < 4) issues.push("Fadiga < 4");
+      if(est !== null && est < 4) issues.push("Estresse < 4");
+      if(dor !== null && dor < 4) issues.push("Dor < 4");
 
-      const eligibleRows = getHeatmapEligibleRows(data);
-
-      if(!eligibleRows.length){
-        container.innerHTML = `<div class="modal-empty">Sem dados para exibir heatmap</div>`;
-        return;
+      if(issues.length){
+        alerts.push({ nome: getName(row), criterios: issues });
       }
+    });
 
-      eligibleRows.forEach(row => {
-        const metrics = [
-          {label:"R", value:safeNullable(row["RECUPERAÇÃO"])},
-          {label:"S", value:safeNullable(row["SONO"])},
-          {label:"F", value:safeNullable(row["FADIGA"])},
-          {label:"E", value:safeNullable(row["ESTRESSE"])},
-          {label:"D", value:safeNullable(row["DOR"])}
-        ];
+    return alerts;
+  }
 
-        const wrap = document.createElement("div");
-        wrap.className = "heat-row";
+  function updateAlertsKPI(data){
+    currentAlertsData = getAlertsDetails(data);
+    document.getElementById("kpiAlerts").innerText = currentAlertsData.length;
+  }
 
-        const name = document.createElement("div");
-        name.className = "heat-name";
-        name.textContent = getName(row);
-        wrap.appendChild(name);
+  function openAlertsModal(){
+    const modal = document.getElementById("alertsModal");
+    const list = document.getElementById("alertsModalList");
+    list.innerHTML = "";
 
-        metrics.forEach(m => {
-          const cell = document.createElement("div");
-          cell.className = "heat-cell";
+    if(!currentAlertsData.length){
+      list.innerHTML = `<div class="modal-empty">Nenhum atleta em alerta no filtro atual.</div>`;
+    } else {
+      currentAlertsData.forEach(item => {
+        const div = document.createElement("div");
+        div.className = "modal-alert-item";
 
-          if(m.value === null){
-            cell.style.background = "#f8fafc";
-            cell.style.border = "1px solid #e2e8f0";
-            cell.style.color = "#94a3b8";
-            cell.title = `${m.label}: sem dado`;
-            cell.innerText = "-";
-          } else {
-            cell.style.background = getReadinessColor(m.value);
-            cell.title = `${m.label}: ${m.value}`;
-            cell.innerText = m.value.toFixed(0);
-          }
+        const criteriaHtml = item.criterios
+          .map(c => `<span class="criterion-tag">${c}</span>`)
+          .join("");
 
-          wrap.appendChild(cell);
-        });
-
-        container.appendChild(wrap);
+        div.innerHTML = `
+          <div class="modal-alert-name">${item.nome}</div>
+          <div class="modal-alert-criteria">${criteriaHtml}</div>
+        `;
+        list.appendChild(div);
       });
     }
 
-    function updateKPIs(data){
-      const eligibleRows = getHeatmapEligibleRows(data);
-      document.getElementById("kpiAthletes").innerText = eligibleRows.length;
+    modal.classList.add("show");
+  }
+
+  function closeAlertsModal(){
+    document.getElementById("alertsModal").classList.remove("show");
+  }
+
+  function buildHeatmap(data){
+    const container = document.getElementById("heatmap");
+    container.innerHTML = "";
+
+    const eligibleRows = getHeatmapEligibleRows(data);
+
+    if(!eligibleRows.length){
+      container.innerHTML = `<div class="modal-empty">Sem dados para exibir heatmap</div>`;
+      return;
     }
 
-    function updateAthleteSection(){
-      const athlete = document.getElementById("athleteFilter").value;
-      const perfil = document.getElementById("perfilSection");
-      const chartsSection = document.getElementById("athleteChartsSection");
+    eligibleRows.forEach(row => {
+      const metrics = [
+        {label:"R", value:safeNullable(row["RECUPERAÇÃO"])},
+        {label:"S", value:safeNullable(row["SONO"])},
+        {label:"F", value:safeNullable(row["FADIGA"])},
+        {label:"E", value:safeNullable(row["ESTRESSE"])},
+        {label:"D", value:safeNullable(row["DOR"])}
+      ];
 
-      if(athlete === "Equipe"){
-        perfil.style.display = "none";
-        chartsSection.style.display = "none";
-        destroyAthleteCharts();
-        resetAthleteMetrics();
-        return;
-      }
+      const wrap = document.createElement("div");
+      wrap.className = "heat-row";
 
-      const desempenho = sortByTimestamp(getFilteredDesempenhoData());
-      const composicao = sortByTimestamp(getFilteredComposicaoData());
+      const name = document.createElement("div");
+      name.className = "heat-name";
+      name.textContent = getName(row);
+      wrap.appendChild(name);
 
-      perfil.style.display = "block";
-      chartsSection.style.display = "grid";
+      metrics.forEach(m => {
+        const cell = document.createElement("div");
+        cell.className = "heat-cell";
 
-      if(!desempenho.length && !composicao.length){
-        destroyAthleteCharts();
-        resetAthleteMetrics();
-        return;
-      }
-
-      const latestDesempenho = desempenho.length ? desempenho[desempenho.length - 1] : null;
-
-      document.getElementById("cmjMetric").innerText = latestDesempenho ? fmtMetric(latestDesempenho["Média CMJ"] || latestDesempenho["CMJ"]) : "-";
-      document.getElementById("sjMetric").innerText = latestDesempenho ? fmtMetric(latestDesempenho["Média Squat Jump"] || latestDesempenho["Squat Jump"] || latestDesempenho["SJ"]) : "-";
-      document.getElementById("mbMetric").innerText = latestDesempenho ? fmtMetric(getArremesso(latestDesempenho)) : "-";
-      document.getElementById("vo2Metric").innerText = latestDesempenho ? fmtMetric(getVO2(latestDesempenho)) : "-";
-
-      const fasesDesempenho = [...new Set(desempenho.map(d => getPhase(d)).filter(Boolean))];
-
-      const cmjPhase = [];
-      const sjPhase = [];
-      const mbPhase = [];
-      const vo2Phase = [];
-
-      fasesDesempenho.forEach(f => {
-        const rows = desempenho.filter(r => getPhase(r) === f);
-
-        cmjPhase.push(getAbsolutePhaseValue(rows, r => safe(r["Média CMJ"] || r["CMJ"])));
-        sjPhase.push(getAbsolutePhaseValue(rows, r => safe(r["Média Squat Jump"] || r["Squat Jump"] || r["SJ"])));
-        mbPhase.push(getAbsolutePhaseValue(rows, r => getArremesso(r)));
-        vo2Phase.push(getAbsolutePhaseValue(rows, r => getVO2(r)));
-      });
-
-      drawSinglePhaseBarChart("cmjPhaseChart", "cmjPhaseChart", "CMJ", fasesDesempenho, cmjPhase, "#0891b2");
-      drawSinglePhaseBarChart("sjPhaseChart", "sjPhaseChart", "Squat Jump", fasesDesempenho, sjPhase, "#2563eb");
-      drawSinglePhaseBarChart("mbPhaseChart", "mbPhaseChart", "Arremesso", fasesDesempenho, mbPhase, "#7c3aed");
-      drawVO2Chart(fasesDesempenho, vo2Phase);
-
-      const fasesComposicao = [...new Set(composicao.map(d => getPhase(d)).filter(Boolean))];
-
-      const pesoPhase = [];
-      const pctGPhase = [];
-      const massaGordaPhase = [];
-      const massaMagraPhase = [];
-      const pctMassaMagraPhase = [];
-
-      fasesComposicao.forEach(f => {
-        const rows = composicao.filter(r => getPhase(r) === f);
-
-        pesoPhase.push(getAbsolutePhaseValue(rows, r => getPeso(r)));
-        pctGPhase.push(getAbsolutePhaseValue(rows, r => getPctG(r)));
-        massaGordaPhase.push(getAbsolutePhaseValue(rows, r => getMassaGorda(r)));
-        massaMagraPhase.push(getAbsolutePhaseValue(rows, r => getMassaMagra(r)));
-        pctMassaMagraPhase.push(getAbsolutePhaseValue(rows, r => getPctMassaMagra(r)));
-      });
-
-      drawBodyCompChart(
-        fasesComposicao,
-        pesoPhase,
-        pctGPhase,
-        massaGordaPhase,
-        massaMagraPhase,
-        pctMassaMagraPhase
-      );
-    }
-
-    function buildTeamWellnessSeries(data){
-      const grouped = {};
-
-      data.forEach(row => {
-        const rawDate = row["Carimbo de data/hora"] || "";
-        const onlyDate = rawDate.split(" ")[0] || "";
-        const shift = getShiftLabel(row);
-
-        if(!onlyDate || !shift) return;
-
-        const key = `${onlyDate}__${shift}`;
-
-        if(!grouped[key]){
-          grouped[key] = {
-            date: onlyDate,
-            shift: shift,
-            rec: [],
-            rpe: [],
-            sleep: [],
-            fad: [],
-            est: [],
-            dor: [],
-            load: []
-          };
+        if(m.value === null){
+          cell.style.background = "#f8fafc";
+          cell.style.border = "1px solid #e2e8f0";
+          cell.style.color = "#94a3b8";
+          cell.title = `${m.label}: sem dado`;
+          cell.innerText = "-";
+        } else {
+          cell.style.background = getReadinessColor(m.value);
+          cell.title = `${m.label}: ${m.value}`;
+          cell.innerText = m.value.toFixed(0);
         }
 
-        const recVal = safeNullable(row["RECUPERAÇÃO"]);
-        const rpeVal = safeNullable(row["ESFORÇO"]);
-        const sleepVal = safeNullable(row["SONO"]);
-        const fadVal = safeNullable(row["FADIGA"]);
-        const estVal = safeNullable(row["ESTRESSE"]);
-        const dorVal = safeNullable(row["DOR"]);
-        const loadVal = getTrainingLoad(row);
-
-        if(recVal !== null) grouped[key].rec.push(recVal);
-        if(rpeVal !== null) grouped[key].rpe.push(rpeVal);
-        if(sleepVal !== null) grouped[key].sleep.push(sleepVal);
-        if(fadVal !== null) grouped[key].fad.push(fadVal);
-        if(estVal !== null) grouped[key].est.push(estVal);
-        if(dorVal !== null) grouped[key].dor.push(dorVal);
-        if(loadVal !== null) grouped[key].load.push(loadVal);
+        wrap.appendChild(cell);
       });
 
-      const orderedGroups = Object.values(grouped).sort((a, b) => {
-        const [da, ma, aa] = a.date.split("/");
-        const [db, mb, ab] = b.date.split("/");
+      container.appendChild(wrap);
+    });
+  }
 
-        const ta = new Date(`${aa}-${ma.padStart(2,"0")}-${da.padStart(2,"0")}T${a.shift === "Manhã" ? "08:00:00" : "16:00:00"}`).getTime();
-        const tb = new Date(`${ab}-${mb.padStart(2,"0")}-${db.padStart(2,"0")}T${b.shift === "Manhã" ? "08:00:00" : "16:00:00"}`).getTime();
+  function updateKPIs(data){
+    const eligibleRows = getHeatmapEligibleRows(data);
+    document.getElementById("kpiAthletes").innerText = eligibleRows.length;
+  }
 
-        return ta - tb;
-      });
+  function updateAthleteSection(){
+    const athlete = document.getElementById("athleteFilter").value;
+    const perfil = document.getElementById("perfilSection");
+    const chartsSection = document.getElementById("athleteChartsSection");
 
-      return {
-        labels: orderedGroups.map(g => `${formatDateBR(g.date)} • ${g.shift}`),
-        rec: orderedGroups.map(g => averageOrNull(g.rec)),
-        rpe: orderedGroups.map(g => averageOrNull(g.rpe)),
-        sleep: orderedGroups.map(g => averageOrNull(g.sleep)),
-        fad: orderedGroups.map(g => averageOrNull(g.fad)),
-        est: orderedGroups.map(g => averageOrNull(g.est)),
-        dor: orderedGroups.map(g => averageOrNull(g.dor)),
-        loadData: orderedGroups.map(g => averageOrNull(g.load))
-      };
+    if(athlete === "Equipe"){
+      perfil.style.display = "none";
+      chartsSection.style.display = "none";
+      destroyAthleteCharts();
+      resetAthleteMetrics();
+      return;
     }
 
-    function updateDashboard(){
-      const monitorData = sortByTimestamp(getFilteredMonitoramentoData());
-      const athlete = document.getElementById("athleteFilter").value;
+    const desempenho = sortByTimestamp(getFilteredDesempenhoData());
+    const composicao = sortByTimestamp(getFilteredComposicaoData());
 
-      const heatmapCard = document.getElementById("heatmapCard");
-      const kpiAlertsCard = document.getElementById("kpiAlertsCard");
-      const kpiAthletesCard = document.getElementById("kpiAthletesCard");
+    perfil.style.display = "block";
+    chartsSection.style.display = "grid";
 
-      updateKPIs(monitorData);
+    if(!desempenho.length && !composicao.length){
+      destroyAthleteCharts();
+      resetAthleteMetrics();
+      return;
+    }
 
-      if(athlete === "Equipe"){
-        heatmapCard.style.display = "block";
-        kpiAlertsCard.style.display = "block";
-        kpiAthletesCard.style.display = "block";
-        updateAlertsKPI(monitorData);
-        buildHeatmap(monitorData);
-      } else {
-        heatmapCard.style.display = "none";
-        kpiAlertsCard.style.display = "none";
-        kpiAthletesCard.style.display = "none";
-        document.getElementById("kpiAlerts").innerText = "0";
-        currentAlertsData = [];
+    const latestDesempenho = desempenho.length ? desempenho[desempenho.length - 1] : null;
+
+    document.getElementById("cmjMetric").innerText = latestDesempenho ? fmtMetric(latestDesempenho["Média CMJ"] || latestDesempenho["CMJ"]) : "-";
+    document.getElementById("sjMetric").innerText = latestDesempenho ? fmtMetric(latestDesempenho["Média Squat Jump"] || latestDesempenho["Squat Jump"] || latestDesempenho["SJ"]) : "-";
+    document.getElementById("mbMetric").innerText = latestDesempenho ? fmtMetric(getArremesso(latestDesempenho)) : "-";
+    document.getElementById("vo2Metric").innerText = latestDesempenho ? fmtMetric(getVO2(latestDesempenho)) : "-";
+
+    const fasesDesempenho = [...new Set(desempenho.map(d => getPhase(d)).filter(Boolean))];
+    const cmjPhase = [];
+    const sjPhase = [];
+    const mbPhase = [];
+    const vo2Phase = [];
+
+    fasesDesempenho.forEach(f => {
+      const rows = desempenho.filter(r => getPhase(r) === f);
+      cmjPhase.push(getAbsolutePhaseValue(rows, r => safe(r["Média CMJ"] || r["CMJ"])));
+      sjPhase.push(getAbsolutePhaseValue(rows, r => safe(r["Média Squat Jump"] || r["Squat Jump"] || r["SJ"])));
+      mbPhase.push(getAbsolutePhaseValue(rows, r => getArremesso(r)));
+      vo2Phase.push(getAbsolutePhaseValue(rows, r => getVO2(r)));
+    });
+
+    drawSinglePhaseBarChart("cmjPhaseChart", "cmjPhaseChart", "CMJ", fasesDesempenho, cmjPhase, "#0891b2");
+    drawSinglePhaseBarChart("sjPhaseChart", "sjPhaseChart", "Squat Jump", fasesDesempenho, sjPhase, "#2563eb");
+    drawSinglePhaseBarChart("mbPhaseChart", "mbPhaseChart", "Arremesso", fasesDesempenho, mbPhase, "#7c3aed");
+    drawVO2Chart(fasesDesempenho, vo2Phase);
+
+    const fasesComposicao = [...new Set(composicao.map(d => getPhase(d)).filter(Boolean))];
+    const pesoPhase = [];
+    const pctGPhase = [];
+    const massaGordaPhase = [];
+    const massaMagraPhase = [];
+    const pctMassaMagraPhase = [];
+
+    fasesComposicao.forEach(f => {
+      const rows = composicao.filter(r => getPhase(r) === f);
+      pesoPhase.push(getAbsolutePhaseValue(rows, r => getPeso(r)));
+      pctGPhase.push(getAbsolutePhaseValue(rows, r => getPctG(r)));
+      massaGordaPhase.push(getAbsolutePhaseValue(rows, r => getMassaGorda(r)));
+      massaMagraPhase.push(getAbsolutePhaseValue(rows, r => getMassaMagra(r)));
+      pctMassaMagraPhase.push(getAbsolutePhaseValue(rows, r => getPctMassaMagra(r)));
+    });
+
+    drawBodyCompChart(
+      fasesComposicao,
+      pesoPhase,
+      pctGPhase,
+      massaGordaPhase,
+      massaMagraPhase,
+      pctMassaMagraPhase
+    );
+  }
+
+  function buildTeamWellnessSeries(data){
+    const grouped = {};
+
+    data.forEach(row => {
+      const rawDate = row["Carimbo de data/hora"] || "";
+      const onlyDate = rawDate.split(" ")[0] || "";
+      const shift = getShiftLabel(row);
+
+      if(!onlyDate || !shift) return;
+
+      const key = `${onlyDate}__${shift}`;
+
+      if(!grouped[key]){
+        grouped[key] = {
+          date: onlyDate,
+          shift: shift,
+          rec: [],
+          rpe: [],
+          sleep: [],
+          fad: [],
+          est: [],
+          dor: [],
+          load: []
+        };
       }
 
-      let labels = [];
-      let rec = [];
-      let rpe = [];
-      let sleep = [];
-      let fad = [];
-      let est = [];
-      let dor = [];
-      let loadData = [];
+      const recVal = safeNullable(row["RECUPERAÇÃO"]);
+      const rpeVal = safeNullable(row["ESFORÇO"]);
+      const sleepVal = safeNullable(row["SONO"]);
+      const fadVal = safeNullable(row["FADIGA"]);
+      const estVal = safeNullable(row["ESTRESSE"]);
+      const dorVal = safeNullable(row["DOR"]);
+      const loadVal = getTrainingLoad(row);
 
-      if(athlete === "Equipe"){
-        const teamSeries = buildTeamWellnessSeries(monitorData);
-        labels = teamSeries.labels;
-        rec = teamSeries.rec;
-        rpe = teamSeries.rpe;
-        sleep = teamSeries.sleep;
-        fad = teamSeries.fad;
-        est = teamSeries.est;
-        dor = teamSeries.dor;
-        loadData = teamSeries.loadData;
-      } else {
-        labels = monitorData.map(d => getDateLabel(d));
-        rec = monitorData.map(d => safeNullable(d["RECUPERAÇÃO"]));
-        rpe = monitorData.map(d => safeNullable(d["ESFORÇO"]));
-        sleep = monitorData.map(d => safeNullable(d["SONO"]));
-        fad = monitorData.map(d => safeNullable(d["FADIGA"]));
-        est = monitorData.map(d => safeNullable(d["ESTRESSE"]));
-        dor = monitorData.map(d => safeNullable(d["DOR"]));
-        loadData = monitorData.map(d => getTrainingLoad(d));
+      if(recVal !== null) grouped[key].rec.push(recVal);
+      if(rpeVal !== null) grouped[key].rpe.push(rpeVal);
+      if(sleepVal !== null) grouped[key].sleep.push(sleepVal);
+      if(fadVal !== null) grouped[key].fad.push(fadVal);
+      if(estVal !== null) grouped[key].est.push(estVal);
+      if(dorVal !== null) grouped[key].dor.push(dorVal);
+      if(loadVal !== null) grouped[key].load.push(loadVal);
+    });
+
+    const orderedGroups = Object.values(grouped).sort((a, b) => {
+      const [da, ma, aa] = a.date.split("/");
+      const [db, mb, ab] = b.date.split("/");
+      const ta = new Date(`${aa}-${ma.padStart(2,"0")}-${da.padStart(2,"0")}T${a.shift === "Manhã" ? "08:00:00" : "16:00:00"}`).getTime();
+      const tb = new Date(`${ab}-${mb.padStart(2,"0")}-${db.padStart(2,"0")}T${b.shift === "Manhã" ? "08:00:00" : "16:00:00"}`).getTime();
+      return ta - tb;
+    });
+
+    return {
+      labels: orderedGroups.map(g => `${formatDateBR(g.date)} • ${g.shift}`),
+      rec: orderedGroups.map(g => averageOrNull(g.rec)),
+      rpe: orderedGroups.map(g => averageOrNull(g.rpe)),
+      sleep: orderedGroups.map(g => averageOrNull(g.sleep)),
+      fad: orderedGroups.map(g => averageOrNull(g.fad)),
+      est: orderedGroups.map(g => averageOrNull(g.est)),
+      dor: orderedGroups.map(g => averageOrNull(g.dor)),
+      loadData: orderedGroups.map(g => averageOrNull(g.load))
+    };
+  }
+
+  function updateDashboard(){
+    const monitorData = sortByTimestamp(getFilteredMonitoramentoData());
+    const athlete = document.getElementById("athleteFilter").value;
+
+    const heatmapCard = document.getElementById("heatmapCard");
+    const kpiAlertsCard = document.getElementById("kpiAlertsCard");
+    const kpiAthletesCard = document.getElementById("kpiAthletesCard");
+
+    updateKPIs(monitorData);
+
+    if(athlete === "Equipe"){
+      heatmapCard.style.display = "block";
+      kpiAlertsCard.style.display = "block";
+      kpiAthletesCard.style.display = "block";
+      updateAlertsKPI(monitorData);
+      buildHeatmap(monitorData);
+    } else {
+      heatmapCard.style.display = "none";
+      kpiAlertsCard.style.display = "none";
+      kpiAthletesCard.style.display = "none";
+      document.getElementById("kpiAlerts").innerText = "0";
+      currentAlertsData = [];
+    }
+
+    let labels = [];
+    let rec = [];
+    let rpe = [];
+    let sleep = [];
+    let fad = [];
+    let est = [];
+    let dor = [];
+    let loadData = [];
+
+    if(athlete === "Equipe"){
+      const teamSeries = buildTeamWellnessSeries(monitorData);
+      labels = teamSeries.labels;
+      rec = teamSeries.rec;
+      rpe = teamSeries.rpe;
+      sleep = teamSeries.sleep;
+      fad = teamSeries.fad;
+      est = teamSeries.est;
+      dor = teamSeries.dor;
+      loadData = teamSeries.loadData;
+    } else {
+      labels = monitorData.map(d => getDateLabel(d));
+      rec = monitorData.map(d => safeNullable(d["RECUPERAÇÃO"]));
+      rpe = monitorData.map(d => safeNullable(d["ESFORÇO"]));
+      sleep = monitorData.map(d => safeNullable(d["SONO"]));
+      fad = monitorData.map(d => safeNullable(d["FADIGA"]));
+      est = monitorData.map(d => safeNullable(d["ESTRESSE"]));
+      dor = monitorData.map(d => safeNullable(d["DOR"]));
+      loadData = monitorData.map(d => getTrainingLoad(d));
+    }
+
+    drawWellness(labels, rec, rpe, sleep, fad, est, dor, loadData);
+    updateAthleteSection();
+  }
+
+  function getAllAthletes(){
+    return getAthletesFromData([
+      ...monitoramentoData,
+      ...desempenhoData,
+      ...composicaoData
+    ]);
+  }
+
+  function getFilteredAthletesByTeam(){
+    const team = document.getElementById("teamFilter").value;
+    const allRows = [
+      ...monitoramentoData,
+      ...desempenhoData,
+      ...composicaoData
+    ];
+
+    const filtered = allRows.filter(r => rowMatchesTeam(r, team));
+    return getAthletesFromData(filtered);
+  }
+
+  function populateAthletesByTeam(){
+    const select = document.getElementById("athleteFilter");
+    const current = select.value;
+    const athletes = getFilteredAthletesByTeam();
+
+    select.innerHTML = `<option value="Equipe">Equipe (Todos)</option>`;
+
+    athletes.forEach(a => {
+      const option = document.createElement("option");
+      option.value = a;
+      option.textContent = a;
+      select.appendChild(option);
+    });
+
+    select.value = athletes.some(a => normalizeText(a) === normalizeText(current)) ? current : "Equipe";
+  }
+
+  function attachEvents(){
+    document.getElementById("teamFilter").addEventListener("change", () => {
+      populateAthletesByTeam();
+      updateDashboard();
+    });
+
+    document.getElementById("athleteFilter").addEventListener("change", updateDashboard);
+
+    document.getElementById("kpiAlertsCard").addEventListener("click", () => {
+      if(document.getElementById("athleteFilter").value === "Equipe"){
+        openAlertsModal();
       }
+    });
 
-      drawWellness(labels, rec, rpe, sleep, fad, est, dor, loadData);
-      updateAthleteSection();
-    }
+    document.getElementById("closeAlertsModal").addEventListener("click", closeAlertsModal);
 
-    function getFilteredAthletesByTeam(){
-      const team = document.getElementById("teamFilter").value;
-      let data = [...monitoramentoData];
-
-      if(team !== "Todas"){
-        data = data.filter(d => getTeam(getName(d)) === team);
+    document.getElementById("alertsModal").addEventListener("click", (e) => {
+      if(e.target.id === "alertsModal"){
+        closeAlertsModal();
       }
+    });
 
-      return getAthletesFromData(data);
-    }
-
-    function populateAthletesByTeam(){
-      const select = document.getElementById("athleteFilter");
-      const current = select.value;
-      const athletes = getFilteredAthletesByTeam();
-
-      select.innerHTML = `<option value="Equipe">Equipe (Todos)</option>`;
-
-      athletes.forEach(a => {
-        const option = document.createElement("option");
-        option.value = a;
-        option.textContent = a;
-        select.appendChild(option);
-      });
-
-      select.value = athletes.includes(current) ? current : "Equipe";
-    }
-
-    function attachEvents(){
-      document.getElementById("teamFilter").addEventListener("change", () => {
-        populateAthletesByTeam();
-        updateDashboard();
-      });
-
-      document.getElementById("athleteFilter").addEventListener("change", updateDashboard);
-
-      document.getElementById("kpiAlertsCard").addEventListener("click", () => {
-        if(document.getElementById("athleteFilter").value === "Equipe"){
-          openAlertsModal();
-        }
-      });
-
-      document.getElementById("closeAlertsModal").addEventListener("click", closeAlertsModal);
-
-      document.getElementById("alertsModal").addEventListener("click", (e) => {
-        if(e.target.id === "alertsModal"){
-          closeAlertsModal();
-        }
-      });
-
-      document.addEventListener("keydown", (e) => {
-        if(e.key === "Escape"){
-          closeAlertsModal();
-        }
-      });
-    }
-
-    function parseCsv(url){
-      return new Promise((resolve, reject) => {
-        Papa.parse(url, {
-          download:true,
-          header:true,
-          skipEmptyLines:true,
-          complete:(res) => resolve(res.data || []),
-          error:(err) => reject(err)
-        });
-      });
-    }
-
-    async function load(){
-      try{
-        const [monitorRows, desempenhoRows, composicaoRows] = await Promise.all([
-          parseCsv(MONITORAMENTO_URL),
-          parseCsv(DESEMPENHO_URL),
-          parseCsv(COMPOSICAO_URL)
-        ]);
-
-        monitoramentoData = monitorRows.filter(r => getName(r));
-        desempenhoData = desempenhoRows.filter(r => getName(r));
-        composicaoData = composicaoRows.filter(r => getName(r));
-
-        populateAthletesByTeam();
-        updateDashboard();
-      }catch(err){
-        console.error("Erro ao carregar planilhas:", err);
-        alert("Erro ao carregar os dados das abas do Google Sheets.");
+    document.addEventListener("keydown", (e) => {
+      if(e.key === "Escape"){
+        closeAlertsModal();
       }
-    }
+    });
+  }
 
-    attachEvents();
-    load();
-  </script>
-</body>
-</html>
+  function parseCsv(url){
+    return new Promise((resolve, reject) => {
+      Papa.parse(url, {
+        download:true,
+        header:true,
+        skipEmptyLines:true,
+        complete:(res) => resolve(res.data || []),
+        error:(err) => reject(err)
+      });
+    });
+  }
+
+  async function load(){
+    try{
+      const [monitorRows, desempenhoRows, composicaoRows] = await Promise.all([
+        parseCsv(MONITORAMENTO_URL),
+        parseCsv(DESEMPENHO_URL),
+        parseCsv(COMPOSICAO_URL)
+      ]);
+
+      monitoramentoData = monitorRows.filter(r => getName(r));
+      desempenhoData = desempenhoRows.filter(r => getName(r));
+      composicaoData = composicaoRows.filter(r => getName(r));
+
+      populateAthletesByTeam();
+      updateDashboard();
+    }catch(err){
+      console.error("Erro ao carregar planilhas:", err);
+      alert("Erro ao carregar os dados das abas do Google Sheets.");
+    }
+  }
+
+  attachEvents();
+  load();
+</script>
