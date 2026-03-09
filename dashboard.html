@@ -19,12 +19,9 @@
       --text:#0f172a;
       --muted:#64748b;
       --green:#16a34a;
-      --green-soft:#dcfce7;
       --yellow:#f59e0b;
       --red:#dc2626;
-      --red-soft:#fee2e2;
       --blue:#2563eb;
-      --cyan:#0891b2;
       --purple:#7c3aed;
       --shadow:0 10px 30px rgba(15,23,42,0.06);
       --radius:18px;
@@ -600,7 +597,6 @@
         </div>
       </div>
     </div>
-
   </div>
 
   <div class="modal-overlay" id="alertsModal">
@@ -790,95 +786,77 @@
       ).trim();
     }
 
-    function destroyChart(name){
-      if(charts[name]){
-        charts[name].destroy();
-        charts[name] = null;
-      }
-    }
-
-    function destroyAthleteCharts(){
-      destroyChart("cmjPhaseChart");
-      destroyChart("sjPhaseChart");
-      destroyChart("mbPhaseChart");
-      destroyChart("vo2Chart");
-      destroyChart("bodyCompChart");
-    }
-
-    function resetAthleteMetrics(){
-      document.getElementById("cmjMetric").innerText = "-";
-      document.getElementById("sjMetric").innerText = "-";
-      document.getElementById("mbMetric").innerText = "-";
-      document.getElementById("vo2Metric").innerText = "-";
-    }
-
-    function getFilteredMonitoramentoData(){
-      const team = document.getElementById("teamFilter").value;
-      const athlete = document.getElementById("athleteFilter").value;
-      return monitoramentoData.filter(d => rowMatchesTeam(d, team) && rowMatchesAthlete(d, athlete));
-    }
-
-    function getFilteredDesempenhoData(){
-      const team = document.getElementById("teamFilter").value;
-      const athlete = document.getElementById("athleteFilter").value;
-      return desempenhoData.filter(d => rowMatchesTeam(d, team) && rowMatchesAthlete(d, athlete));
-    }
-
-    function getFilteredComposicaoData(){
-      const team = document.getElementById("teamFilter").value;
-      const athlete = document.getElementById("athleteFilter").value;
-      return composicaoData.filter(d => rowMatchesTeam(d, team) && rowMatchesAthlete(d, athlete));
-    }
-
-    function getAthletesFromData(data){
-      return [...new Set(data.map(d => getName(d)).filter(Boolean))].sort((a,b)=>a.localeCompare(b, "pt-BR"));
-    }
-
-    function getLatestRowByAthlete(data){
-      const athletes = getAthletesFromData(data);
-      const result = [];
-
-      athletes.forEach(name => {
-        const rows = sortByTimestamp(data.filter(r => normalizeText(getName(r)) === normalizeText(name)));
-        const last = rows[rows.length - 1];
-        if(last) result.push(last);
-      });
-
-      return result;
-    }
-
-    function getHeatmapEligibleRows(data){
-      const latestRows = getLatestRowByAthlete(data);
-      return latestRows.filter(row => {
-        const vals = [
-          safeNullable(row["RECUPERAÇÃO"]),
-          safeNullable(row["SONO"]),
-          safeNullable(row["FADIGA"]),
-          safeNullable(row["ESTRESSE"]),
-          safeNullable(row["DOR"])
-        ];
-        return vals.some(v => v !== null);
-      });
-    }
-
-    function getReadinessColor(v){
-      if(v < 4) return "#fecaca";
-      if(v < 7) return "#fde68a";
-      return "#bbf7d0";
-    }
-
-    function getTrainingLoad(row){
-      const esforco = safeNullable(row["ESFORÇO"]);
-      const tempo = safeNullable(
-        row["TEMPO SESSÃO"] ||
-        row["TEMPO DA SESSÃO"] ||
-        row["TEMPO SESSAO"] ||
-        row["DURAÇÃO"] ||
-        row["DURACAO"] ||
-        row["TEMPO"]
+    function getCMJ(row){
+      const c1 = safeNullable(
+        row["CMJ 1"] ||
+        row["CMJ1"] ||
+        row["Salto CMJ 1"] ||
+        row["Countermovement Jump 1"]
       );
-      if(esforco === null || tempo === null) return null;
-      return esforco * tempo;
+
+      const c2 = safeNullable(
+        row["CMJ 2"] ||
+        row["CMJ2"] ||
+        row["Salto CMJ 2"] ||
+        row["Countermovement Jump 2"]
+      );
+
+      const c3 = safeNullable(
+        row["CMJ 3"] ||
+        row["CMJ3"] ||
+        row["Salto CMJ 3"] ||
+        row["Countermovement Jump 3"]
+      );
+
+      const mediaDireta = safeNullable(
+        row["Média CMJ"] ||
+        row["MEDIA CMJ"] ||
+        row["CMJ"] ||
+        row["Média do CMJ"]
+      );
+
+      const valores = [c1, c2, c3].filter(v => v !== null && !isNaN(v));
+
+      if(valores.length) return valores.reduce((a,b)=>a+b,0) / valores.length;
+      if(mediaDireta !== null) return mediaDireta;
+      return 0;
+    }
+
+    function getSquatJump(row){
+      const s1 = safeNullable(
+        row["Squat Jump 1"] ||
+        row["SJ 1"] ||
+        row["SJ1"] ||
+        row["Salto Squat Jump 1"]
+      );
+
+      const s2 = safeNullable(
+        row["Squat Jump 2"] ||
+        row["SJ 2"] ||
+        row["SJ2"] ||
+        row["Salto Squat Jump 2"]
+      );
+
+      const s3 = safeNullable(
+        row["Squat Jump 3"] ||
+        row["SJ 3"] ||
+        row["SJ3"] ||
+        row["Salto Squat Jump 3"]
+      );
+
+      const mediaDireta = safeNullable(
+        row["Média Squat Jump"] ||
+        row["MEDIA SQUAT JUMP"] ||
+        row["Squat Jump"] ||
+        row["SJ"] ||
+        row["Média do Squat Jump"]
+      );
+
+      const valores = [s1, s2, s3].filter(v => v !== null && !isNaN(v));
+
+      if(valores.length) return valores.reduce((a,b)=>a+b,0) / valores.length;
+      if(mediaDireta !== null) return mediaDireta;
+      return 0;
     }
 
     function getVO2(row){
@@ -954,12 +932,109 @@
       const a1 = safeNullable(row["Arremesso Medicine Ball 1"] || row["Arremesso 1"] || row["Arremesso MB 1"]);
       const a2 = safeNullable(row["Arremesso Medicine Ball 2"] || row["Arremesso 2"] || row["Arremesso MB 2"]);
       const a3 = safeNullable(row["Arremesso Medicine Ball 3"] || row["Arremesso 3"] || row["Arremesso MB 3"]);
-      const mediaDireta = safeNullable(row["Média Arremesso"] || row["MEDIA ARREMESSO"] || row["Arremesso"] || row["ARREMESSO"]);
+
+      const mediaDireta = safeNullable(
+        row["Média Arremesso"] ||
+        row["MEDIA ARREMESSO"] ||
+        row["Arremesso"] ||
+        row["ARREMESSO"]
+      );
 
       const valores = [a1, a2, a3].filter(v => v !== null && !isNaN(v));
       if(valores.length) return valores.reduce((a,b)=>a+b,0) / valores.length;
       if(mediaDireta !== null) return mediaDireta;
       return 0;
+    }
+
+    function getTrainingLoad(row){
+      const esforco = safeNullable(row["ESFORÇO"]);
+      const tempo = safeNullable(
+        row["TEMPO SESSÃO"] ||
+        row["TEMPO DA SESSÃO"] ||
+        row["TEMPO SESSAO"] ||
+        row["DURAÇÃO"] ||
+        row["DURACAO"] ||
+        row["TEMPO"]
+      );
+      if(esforco === null || tempo === null) return null;
+      return esforco * tempo;
+    }
+
+    function destroyChart(name){
+      if(charts[name]){
+        charts[name].destroy();
+        charts[name] = null;
+      }
+    }
+
+    function destroyAthleteCharts(){
+      destroyChart("cmjPhaseChart");
+      destroyChart("sjPhaseChart");
+      destroyChart("mbPhaseChart");
+      destroyChart("vo2Chart");
+      destroyChart("bodyCompChart");
+    }
+
+    function resetAthleteMetrics(){
+      document.getElementById("cmjMetric").innerText = "-";
+      document.getElementById("sjMetric").innerText = "-";
+      document.getElementById("mbMetric").innerText = "-";
+      document.getElementById("vo2Metric").innerText = "-";
+    }
+
+    function getFilteredMonitoramentoData(){
+      const team = document.getElementById("teamFilter").value;
+      const athlete = document.getElementById("athleteFilter").value;
+      return monitoramentoData.filter(d => rowMatchesTeam(d, team) && rowMatchesAthlete(d, athlete));
+    }
+
+    function getFilteredDesempenhoData(){
+      const team = document.getElementById("teamFilter").value;
+      const athlete = document.getElementById("athleteFilter").value;
+      return desempenhoData.filter(d => rowMatchesTeam(d, team) && rowMatchesAthlete(d, athlete));
+    }
+
+    function getFilteredComposicaoData(){
+      const team = document.getElementById("teamFilter").value;
+      const athlete = document.getElementById("athleteFilter").value;
+      return composicaoData.filter(d => rowMatchesTeam(d, team) && rowMatchesAthlete(d, athlete));
+    }
+
+    function getAthletesFromData(data){
+      return [...new Set(data.map(d => getName(d)).filter(Boolean))].sort((a,b)=>a.localeCompare(b, "pt-BR"));
+    }
+
+    function getLatestRowByAthlete(data){
+      const athletes = getAthletesFromData(data);
+      const result = [];
+
+      athletes.forEach(name => {
+        const rows = sortByTimestamp(data.filter(r => normalizeText(getName(r)) === normalizeText(name)));
+        const last = rows[rows.length - 1];
+        if(last) result.push(last);
+      });
+
+      return result;
+    }
+
+    function getHeatmapEligibleRows(data){
+      const latestRows = getLatestRowByAthlete(data);
+      return latestRows.filter(row => {
+        const vals = [
+          safeNullable(row["RECUPERAÇÃO"]),
+          safeNullable(row["SONO"]),
+          safeNullable(row["FADIGA"]),
+          safeNullable(row["ESTRESSE"]),
+          safeNullable(row["DOR"])
+        ];
+        return vals.some(v => v !== null);
+      });
+    }
+
+    function getReadinessColor(v){
+      if(v < 4) return "#fecaca";
+      if(v < 7) return "#fde68a";
+      return "#bbf7d0";
     }
 
     function getAbsolutePhaseValue(rows, getter){
@@ -1110,7 +1185,12 @@
           interaction:{mode:"index", intersect:false},
           spanGaps:false,
           plugins:{
-            legend:{ labels:{ font:{size:13, weight:"600"}, color:"#334155" } },
+            legend:{
+              labels:{
+                font:{size:13, weight:"600"},
+                color:"#334155"
+              }
+            },
             tooltip:{
               backgroundColor:"rgba(15,23,42,0.92)",
               titleFont:{weight:"700"},
@@ -1162,7 +1242,13 @@
         type:"bar",
         data:{
           labels,
-          datasets:[{ label, data, backgroundColor:color, borderRadius:8, maxBarThickness:48 }]
+          datasets:[{
+            label,
+            data,
+            backgroundColor:color,
+            borderRadius:8,
+            maxBarThickness:48
+          }]
         },
         options:{
           ...baseChartOptions(),
@@ -1287,7 +1373,6 @@
       container.innerHTML = "";
 
       const eligibleRows = getHeatmapEligibleRows(data);
-
       if(!eligibleRows.length){
         container.innerHTML = `<div class="modal-empty">Sem dados para exibir heatmap</div>`;
         return;
@@ -1365,8 +1450,8 @@
 
       const latestDesempenho = desempenho.length ? desempenho[desempenho.length - 1] : null;
 
-      document.getElementById("cmjMetric").innerText = latestDesempenho ? fmtMetric(latestDesempenho["Média CMJ"] || latestDesempenho["CMJ"]) : "-";
-      document.getElementById("sjMetric").innerText = latestDesempenho ? fmtMetric(latestDesempenho["Média Squat Jump"] || latestDesempenho["Squat Jump"] || latestDesempenho["SJ"]) : "-";
+      document.getElementById("cmjMetric").innerText = latestDesempenho ? fmtMetric(getCMJ(latestDesempenho)) : "-";
+      document.getElementById("sjMetric").innerText = latestDesempenho ? fmtMetric(getSquatJump(latestDesempenho)) : "-";
       document.getElementById("mbMetric").innerText = latestDesempenho ? fmtMetric(getArremesso(latestDesempenho)) : "-";
       document.getElementById("vo2Metric").innerText = latestDesempenho ? fmtMetric(getVO2(latestDesempenho)) : "-";
 
@@ -1378,8 +1463,8 @@
 
       fasesDesempenho.forEach(f => {
         const rows = desempenho.filter(r => getPhase(r) === f);
-        cmjPhase.push(getAbsolutePhaseValue(rows, r => safe(r["Média CMJ"] || r["CMJ"])));
-        sjPhase.push(getAbsolutePhaseValue(rows, r => safe(r["Média Squat Jump"] || r["Squat Jump"] || r["SJ"])));
+        cmjPhase.push(getAbsolutePhaseValue(rows, r => getCMJ(r)));
+        sjPhase.push(getAbsolutePhaseValue(rows, r => getSquatJump(r)));
         mbPhase.push(getAbsolutePhaseValue(rows, r => getArremesso(r)));
         vo2Phase.push(getAbsolutePhaseValue(rows, r => getVO2(r)));
       });
