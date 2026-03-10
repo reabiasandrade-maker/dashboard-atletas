@@ -904,85 +904,263 @@
       return 0;
     }
 
-    function getEffortForRow(row){
-      const shift = getShiftLabel(row);
-
-      const generalKeys = [
-        "ESFORÇO", "ESFORCO", "PSE", "RPE"
-      ];
-
-      for(const key of generalKeys){
+    function getFirstNullableByKeys(row, keys){
+      for(const key of keys){
         const val = safeNullable(row[key]);
         if(val !== null) return val;
       }
+      return null;
+    }
+
+    function getGeneralEffort(row){
+      return getFirstNullableByKeys(row, [
+        "ESFORÇO", "ESFORCO", "PSE", "RPE", "Esforço", "Esforco"
+      ]);
+    }
+
+    function getGeneralTime(row){
+      return getFirstNullableByKeys(row, [
+        "TEMPO SESSÃO", "TEMPO DA SESSÃO", "TEMPO SESSAO", "DURAÇÃO", "DURACAO", "TEMPO",
+        "Tempo", "Duração", "Duracao"
+      ]);
+    }
+
+    function getTreino1Effort(row){
+      return getFirstNullableByKeys(row, [
+        "ESFORÇO TREINO 1", "ESFORÇO 1", "ESFORCO TREINO 1", "ESFORCO 1",
+        "PSE TREINO 1", "PSE 1", "RPE TREINO 1", "RPE 1",
+        "Esforço treino 1", "Esforço 1", "Esforco treino 1", "Esforco 1",
+        "Pse treino 1", "Pse 1", "Rpe treino 1", "Rpe 1"
+      ]);
+    }
+
+    function getTreino2Effort(row){
+      return getFirstNullableByKeys(row, [
+        "ESFORÇO TREINO 2", "ESFORÇO 2", "ESFORCO TREINO 2", "ESFORCO 2",
+        "PSE TREINO 2", "PSE 2", "RPE TREINO 2", "RPE 2",
+        "Esforço treino 2", "Esforço 2", "Esforco treino 2", "Esforco 2",
+        "Pse treino 2", "Pse 2", "Rpe treino 2", "Rpe 2"
+      ]);
+    }
+
+    function getTreino1Time(row){
+      return getFirstNullableByKeys(row, [
+        "TEMPO TREINO 1", "TEMPO DE TREINO 1", "TEMPO SESSÃO 1", "TEMPO SESSAO 1",
+        "TEMPO 1", "DURAÇÃO 1", "DURACAO 1", "DURAÇÃO TREINO 1", "DURACAO TREINO 1",
+        "Tempo treino 1", "Tempo de treino 1", "Tempo sessão 1", "Tempo sessao 1",
+        "Tempo 1", "Duração 1", "Duracao 1", "Duração treino 1", "Duracao treino 1"
+      ]);
+    }
+
+    function getTreino2Time(row){
+      return getFirstNullableByKeys(row, [
+        "TEMPO TREINO 2", "TEMPO DE TREINO 2", "TEMPO SESSÃO 2", "TEMPO SESSAO 2",
+        "TEMPO 2", "DURAÇÃO 2", "DURACAO 2", "DURAÇÃO TREINO 2", "DURACAO TREINO 2",
+        "Tempo treino 2", "Tempo de treino 2", "Tempo sessão 2", "Tempo sessao 2",
+        "Tempo 2", "Duração 2", "Duracao 2", "Duração treino 2", "Duracao treino 2"
+      ]);
+    }
+
+    function getEffortForRow(row){
+      const shift = getShiftLabel(row);
 
       if(shift === "Manhã"){
-        const treino1Keys = [
-          "ESFORÇO TREINO 1", "ESFORÇO 1", "ESFORCO TREINO 1", "ESFORCO 1",
-          "PSE TREINO 1", "PSE 1", "RPE TREINO 1", "RPE 1"
-        ];
-        for(const key of treino1Keys){
-          const val = safeNullable(row[key]);
-          if(val !== null) return val;
-        }
+        return getTreino1Effort(row) ?? getGeneralEffort(row);
       }
 
       if(shift === "Tarde"){
-        const treino2Keys = [
-          "ESFORÇO TREINO 2", "ESFORÇO 2", "ESFORCO TREINO 2", "ESFORCO 2",
-          "PSE TREINO 2", "PSE 2", "RPE TREINO 2", "RPE 2"
-        ];
-        for(const key of treino2Keys){
-          const val = safeNullable(row[key]);
-          if(val !== null) return val;
-        }
+        return getTreino2Effort(row) ?? getGeneralEffort(row);
       }
 
-      return null;
+      return getTreino1Effort(row) ?? getTreino2Effort(row) ?? getGeneralEffort(row);
     }
 
     function getTrainingTimeForRow(row){
       const shift = getShiftLabel(row);
 
       if(shift === "Manhã"){
-        const treino1Keys = [
-          "TEMPO TREINO 1", "TEMPO DE TREINO 1", "TEMPO SESSÃO 1", "TEMPO SESSAO 1",
-          "TEMPO 1", "DURAÇÃO 1", "DURACAO 1", "DURAÇÃO TREINO 1", "DURACAO TREINO 1"
-        ];
-        for(const key of treino1Keys){
-          const val = safeNullable(row[key]);
-          if(val !== null) return val;
-        }
+        return getTreino1Time(row) ?? getGeneralTime(row);
       }
 
       if(shift === "Tarde"){
-        const treino2Keys = [
-          "TEMPO TREINO 2", "TEMPO DE TREINO 2", "TEMPO SESSÃO 2", "TEMPO SESSAO 2",
-          "TEMPO 2", "DURAÇÃO 2", "DURACAO 2", "DURAÇÃO TREINO 2", "DURACAO TREINO 2"
-        ];
-        for(const key of treino2Keys){
-          const val = safeNullable(row[key]);
-          if(val !== null) return val;
-        }
+        return getTreino2Time(row) ?? getGeneralTime(row);
       }
 
-      const generalKeys = [
-        "TEMPO SESSÃO", "TEMPO DA SESSÃO", "TEMPO SESSAO", "DURAÇÃO", "DURACAO", "TEMPO"
-      ];
-      for(const key of generalKeys){
-        const val = safeNullable(row[key]);
-        if(val !== null) return val;
-      }
+      return getTreino1Time(row) ?? getTreino2Time(row) ?? getGeneralTime(row);
+    }
 
-      return null;
+    function calcLoad(effort, time){
+      if(effort === null || time === null) return null;
+      return effort * time;
     }
 
     function getTrainingLoad(row){
-      const esforco = getEffortForRow(row);
-      const tempo = getTrainingTimeForRow(row);
+      const shift = getShiftLabel(row);
 
-      if(esforco === null || tempo === null) return null;
-      return esforco * tempo;
+      if(shift === "Manhã"){
+        return calcLoad(getTreino1Effort(row) ?? getGeneralEffort(row), getTreino1Time(row) ?? getGeneralTime(row));
+      }
+
+      if(shift === "Tarde"){
+        return calcLoad(getTreino2Effort(row) ?? getGeneralEffort(row), getTreino2Time(row) ?? getGeneralTime(row));
+      }
+
+      const load1 = calcLoad(getTreino1Effort(row), getTreino1Time(row));
+      const load2 = calcLoad(getTreino2Effort(row), getTreino2Time(row));
+
+      if(load1 !== null || load2 !== null){
+        return (load1 || 0) + (load2 || 0);
+      }
+
+      return calcLoad(getGeneralEffort(row), getGeneralTime(row));
+    }
+
+    function getReadinessValues(row){
+      return {
+        rec: safeNullable(row["RECUPERAÇÃO"]),
+        sleep: safeNullable(row["SONO"]),
+        fad: safeNullable(row["FADIGA"]),
+        est: safeNullable(row["ESTRESSE"]),
+        dor: safeNullable(row["DOR"])
+      };
+    }
+
+    function extractSessionPointsFromRow(row){
+      const rawDate = row["Carimbo de data/hora"] || row["Data"] || row["DATA"] || row["data"] || "";
+      const onlyDate = String(rawDate).split(" ")[0] || "";
+      if(!onlyDate) return [];
+
+      const shift = getShiftLabel(row);
+      const readiness = getReadinessValues(row);
+
+      const generalEffort = getGeneralEffort(row);
+      const generalTime = getGeneralTime(row);
+
+      const effort1 = getTreino1Effort(row);
+      const effort2 = getTreino2Effort(row);
+      const time1 = getTreino1Time(row);
+      const time2 = getTreino2Time(row);
+
+      const hasSpecificMorning = effort1 !== null || time1 !== null;
+      const hasSpecificAfternoon = effort2 !== null || time2 !== null;
+      const hasGeneralShiftSession = shift && (generalEffort !== null || generalTime !== null);
+      const points = [];
+
+      if(hasSpecificMorning){
+        points.push({
+          date: onlyDate,
+          shift: "Manhã",
+          rec: readiness.rec,
+          rpe: effort1,
+          sleep: readiness.sleep,
+          fad: readiness.fad,
+          est: readiness.est,
+          dor: readiness.dor,
+          load: calcLoad(effort1, time1),
+          timestamp: getTimestampFromAnyDate(`${onlyDate} 08:00:00`)
+        });
+      }
+
+      if(hasSpecificAfternoon){
+        points.push({
+          date: onlyDate,
+          shift: "Tarde",
+          rec: readiness.rec,
+          rpe: effort2,
+          sleep: readiness.sleep,
+          fad: readiness.fad,
+          est: readiness.est,
+          dor: readiness.dor,
+          load: calcLoad(effort2, time2),
+          timestamp: getTimestampFromAnyDate(`${onlyDate} 16:00:00`)
+        });
+      }
+
+      if(!hasSpecificMorning && !hasSpecificAfternoon && hasGeneralShiftSession){
+        points.push({
+          date: onlyDate,
+          shift: shift,
+          rec: readiness.rec,
+          rpe: generalEffort,
+          sleep: readiness.sleep,
+          fad: readiness.fad,
+          est: readiness.est,
+          dor: readiness.dor,
+          load: calcLoad(generalEffort, generalTime),
+          timestamp: getDateTimeValue(row) || getTimestampFromAnyDate(`${onlyDate} ${shift === "Manhã" ? "08:00:00" : "16:00:00"}`)
+        });
+      }
+
+      return points;
+    }
+
+    function buildSessionSeries(rows){
+      const allPoints = rows.flatMap(extractSessionPointsFromRow);
+
+      const sorted = [...allPoints].sort((a,b) => {
+        if(a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+        if(a.date !== b.date) return a.date.localeCompare(b.date);
+        return a.shift === "Manhã" ? -1 : 1;
+      });
+
+      return {
+        labels: sorted.map(p => `${formatDateBR(p.date)} • ${p.shift}`),
+        rec: sorted.map(p => p.rec),
+        rpe: sorted.map(p => p.rpe),
+        sleep: sorted.map(p => p.sleep),
+        fad: sorted.map(p => p.fad),
+        est: sorted.map(p => p.est),
+        dor: sorted.map(p => p.dor),
+        loadData: sorted.map(p => p.load)
+      };
+    }
+
+    function buildTeamWellnessSeries(data){
+      const grouped = {};
+
+      data.forEach(row => {
+        const sessionPoints = extractSessionPointsFromRow(row);
+
+        sessionPoints.forEach(point => {
+          const key = `${point.date}__${point.shift}`;
+
+          if(!grouped[key]){
+            grouped[key] = {
+              date: point.date,
+              shift: point.shift,
+              timestamp: point.timestamp,
+              rec: [],
+              rpe: [],
+              sleep: [],
+              fad: [],
+              est: [],
+              dor: [],
+              load: []
+            };
+          }
+
+          if(point.rec !== null) grouped[key].rec.push(point.rec);
+          if(point.rpe !== null) grouped[key].rpe.push(point.rpe);
+          if(point.sleep !== null) grouped[key].sleep.push(point.sleep);
+          if(point.fad !== null) grouped[key].fad.push(point.fad);
+          if(point.est !== null) grouped[key].est.push(point.est);
+          if(point.dor !== null) grouped[key].dor.push(point.dor);
+          if(point.load !== null) grouped[key].load.push(point.load);
+        });
+      });
+
+      const orderedGroups = Object.values(grouped).sort((a, b) => a.timestamp - b.timestamp);
+
+      return {
+        labels: orderedGroups.map(g => `${formatDateBR(g.date)} • ${g.shift}`),
+        rec: orderedGroups.map(g => averageOrNull(g.rec)),
+        rpe: orderedGroups.map(g => averageOrNull(g.rpe)),
+        sleep: orderedGroups.map(g => averageOrNull(g.sleep)),
+        fad: orderedGroups.map(g => averageOrNull(g.fad)),
+        est: orderedGroups.map(g => averageOrNull(g.est)),
+        dor: orderedGroups.map(g => averageOrNull(g.dor)),
+        loadData: orderedGroups.map(g => averageOrNull(g.load))
+      };
     }
 
     function destroyChart(name){
@@ -1518,69 +1696,6 @@
       drawBodyCompChart(fasesComposicao, pesoPhase, pctGPhase, massaGordaPhase, massaMagraPhase, pctMassaMagraPhase);
     }
 
-    function buildTeamWellnessSeries(data){
-      const grouped = {};
-
-      data.forEach(row => {
-        const rawDate = row["Carimbo de data/hora"] || "";
-        const onlyDate = rawDate.split(" ")[0] || "";
-        const shift = getShiftLabel(row);
-
-        if(!onlyDate || !shift) return;
-
-        const key = `${onlyDate}__${shift}`;
-
-        if(!grouped[key]){
-          grouped[key] = {
-            date: onlyDate,
-            shift: shift,
-            rec: [],
-            rpe: [],
-            sleep: [],
-            fad: [],
-            est: [],
-            dor: [],
-            load: []
-          };
-        }
-
-        const recVal = safeNullable(row["RECUPERAÇÃO"]);
-        const rpeVal = getEffortForRow(row);
-        const sleepVal = safeNullable(row["SONO"]);
-        const fadVal = safeNullable(row["FADIGA"]);
-        const estVal = safeNullable(row["ESTRESSE"]);
-        const dorVal = safeNullable(row["DOR"]);
-        const loadVal = getTrainingLoad(row);
-
-        if(recVal !== null) grouped[key].rec.push(recVal);
-        if(rpeVal !== null) grouped[key].rpe.push(rpeVal);
-        if(sleepVal !== null) grouped[key].sleep.push(sleepVal);
-        if(fadVal !== null) grouped[key].fad.push(fadVal);
-        if(estVal !== null) grouped[key].est.push(estVal);
-        if(dorVal !== null) grouped[key].dor.push(dorVal);
-        if(loadVal !== null) grouped[key].load.push(loadVal);
-      });
-
-      const orderedGroups = Object.values(grouped).sort((a, b) => {
-        const [da, ma, aa] = a.date.split("/");
-        const [db, mb, ab] = b.date.split("/");
-        const ta = new Date(`${aa}-${ma.padStart(2,"0")}-${da.padStart(2,"0")}T${a.shift === "Manhã" ? "08:00:00" : "16:00:00"}`).getTime();
-        const tb = new Date(`${ab}-${mb.padStart(2,"0")}-${db.padStart(2,"0")}T${b.shift === "Manhã" ? "08:00:00" : "16:00:00"}`).getTime();
-        return ta - tb;
-      });
-
-      return {
-        labels: orderedGroups.map(g => `${formatDateBR(g.date)} • ${g.shift}`),
-        rec: orderedGroups.map(g => averageOrNull(g.rec)),
-        rpe: orderedGroups.map(g => averageOrNull(g.rpe)),
-        sleep: orderedGroups.map(g => averageOrNull(g.sleep)),
-        fad: orderedGroups.map(g => averageOrNull(g.fad)),
-        est: orderedGroups.map(g => averageOrNull(g.est)),
-        dor: orderedGroups.map(g => averageOrNull(g.dor)),
-        loadData: orderedGroups.map(g => averageOrNull(g.load))
-      };
-    }
-
     function updateDashboard(){
       const monitorData = sortByTimestamp(getFilteredMonitoramentoData());
       const athlete = document.getElementById("athleteFilter").value;
@@ -1625,14 +1740,15 @@
         dor = teamSeries.dor;
         loadData = teamSeries.loadData;
       } else {
-        labels = monitorData.map(d => getDateLabel(d));
-        rec = monitorData.map(d => safeNullable(d["RECUPERAÇÃO"]));
-        rpe = monitorData.map(d => getEffortForRow(d));
-        sleep = monitorData.map(d => safeNullable(d["SONO"]));
-        fad = monitorData.map(d => safeNullable(d["FADIGA"]));
-        est = monitorData.map(d => safeNullable(d["ESTRESSE"]));
-        dor = monitorData.map(d => safeNullable(d["DOR"]));
-        loadData = monitorData.map(d => getTrainingLoad(d));
+        const individualSeries = buildSessionSeries(monitorData);
+        labels = individualSeries.labels;
+        rec = individualSeries.rec;
+        rpe = individualSeries.rpe;
+        sleep = individualSeries.sleep;
+        fad = individualSeries.fad;
+        est = individualSeries.est;
+        dor = individualSeries.dor;
+        loadData = individualSeries.loadData;
       }
 
       drawWellness(labels, rec, rpe, sleep, fad, est, dor, loadData);
