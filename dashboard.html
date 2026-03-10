@@ -1056,20 +1056,31 @@
       if(!onlyDate) return [];
 
       const readiness = getReadinessValues(row);
+      const declaredShift = getShiftLabel(row);
+
+      const generalEffort = getGeneralEffort(row);
+      const generalTime = getGeneralTime(row);
 
       const effort1 = getTreino1Effort(row);
       const effort2 = getTreino2Effort(row);
       const time1 = getTreino1Time(row);
       const time2 = getTreino2Time(row);
 
-      const load1 = calcLoad(effort1, time1);
-      const load2 = calcLoad(effort2, time2);
+      const morningEffort = effort1 !== null ? effort1 : (declaredShift === "Manhã" ? generalEffort : null);
+      const afternoonEffort = effort2 !== null ? effort2 : (declaredShift === "Tarde" ? generalEffort : null);
+
+      const morningTime = time1 !== null ? time1 : (declaredShift === "Manhã" ? generalTime : null);
+      const afternoonTime = time2 !== null ? time2 : (declaredShift === "Tarde" ? generalTime : null);
+
+      const load1 = calcLoad(morningEffort, morningTime);
+      const load2 = calcLoad(afternoonEffort, afternoonTime);
 
       const points = [];
 
       const hasMorning =
         effort1 !== null ||
         time1 !== null ||
+        declaredShift === "Manhã" ||
         readiness.rec !== null ||
         readiness.sleep !== null ||
         readiness.fad !== null ||
@@ -1078,14 +1089,15 @@
 
       const hasAfternoon =
         effort2 !== null ||
-        time2 !== null;
+        time2 !== null ||
+        declaredShift === "Tarde";
 
       if(hasMorning){
         points.push({
           date: onlyDate,
           shift: "Manhã",
           rec: readiness.rec,
-          rpe: effort1,
+          rpe: morningEffort,
           sleep: readiness.sleep,
           fad: readiness.fad,
           est: readiness.est,
@@ -1100,7 +1112,7 @@
           date: onlyDate,
           shift: "Tarde",
           rec: readiness.rec,
-          rpe: effort2,
+          rpe: afternoonEffort,
           sleep: readiness.sleep,
           fad: readiness.fad,
           est: readiness.est,
@@ -1296,19 +1308,6 @@
       return [...new Set(data.map(d => getName(d)).filter(Boolean))].sort((a,b)=>a.localeCompare(b, "pt-BR"));
     }
 
-    function getLatestRowByAthlete(data){
-      const athletes = getAthletesFromData(data);
-      const result = [];
-
-      athletes.forEach(name => {
-        const rows = sortByTimestamp(data.filter(r => normalizeText(getName(r)) === normalizeText(name)));
-        const last = rows[rows.length - 1];
-        if(last) result.push(last);
-      });
-
-      return result;
-    }
-
     function getCurrentDayMergedRows(data){
       const todayKey = getCurrentDateKey();
       const todayRows = sortByTimestamp(data.filter(row => getRowDateKey(row) === todayKey));
@@ -1450,6 +1449,8 @@
               tension:0.35,
               borderWidth:3,
               pointRadius:3,
+              pointHoverRadius:5,
+              spanGaps:true,
               yAxisID:"y"
             },
             {
@@ -1461,6 +1462,8 @@
               tension:0.35,
               borderWidth:3,
               pointRadius:3,
+              pointHoverRadius:5,
+              spanGaps:true,
               yAxisID:"y"
             },
             {
@@ -1472,6 +1475,8 @@
               tension:0.35,
               borderWidth:3,
               pointRadius:3,
+              pointHoverRadius:5,
+              spanGaps:true,
               yAxisID:"y"
             },
             {
@@ -1483,6 +1488,8 @@
               tension:0.35,
               borderWidth:3,
               pointRadius:3,
+              pointHoverRadius:5,
+              spanGaps:true,
               yAxisID:"y"
             },
             {
@@ -1494,6 +1501,8 @@
               tension:0.35,
               borderWidth:3,
               pointRadius:3,
+              pointHoverRadius:5,
+              spanGaps:true,
               yAxisID:"y"
             },
             {
@@ -1505,6 +1514,8 @@
               tension:0.35,
               borderWidth:3,
               pointRadius:3,
+              pointHoverRadius:5,
+              spanGaps:true,
               yAxisID:"y"
             }
           ]
@@ -1513,7 +1524,6 @@
           responsive:true,
           maintainAspectRatio:false,
           interaction:{mode:"index", intersect:false},
-          spanGaps:false,
           plugins:{
             legend:{
               labels:{
@@ -1538,6 +1548,7 @@
           },
           scales:{
             x:{
+              stacked:false,
               ticks:{
                 color:"#475569",
                 maxRotation:45,
