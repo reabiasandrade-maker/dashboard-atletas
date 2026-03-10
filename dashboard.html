@@ -820,28 +820,23 @@
 
       if(
         raw === "1" ||
-        raw === "turno 1" ||
         raw === "treino 1" ||
         raw.includes("treino 1") ||
-        raw.includes("turno 1") ||
-        raw === "manhã" ||
-        raw === "manha"
+        raw === "turno 1"
       ){
         return "Manhã";
       }
 
       if(
         raw === "2" ||
-        raw === "turno 2" ||
         raw === "treino 2" ||
         raw.includes("treino 2") ||
-        raw.includes("turno 2") ||
-        raw === "tarde"
+        raw === "turno 2"
       ){
         return "Tarde";
       }
 
-      return raw ? raw : "";
+      return "";
     }
 
     function getDateLabel(row){
@@ -1060,23 +1055,32 @@
       const onlyDate = String(rawDate).split(" ")[0] || "";
       if(!onlyDate) return [];
 
-      const shift = getShiftLabel(row);
       const readiness = getReadinessValues(row);
-
-      const generalEffort = getGeneralEffort(row);
-      const generalTime = getGeneralTime(row);
 
       const effort1 = getTreino1Effort(row);
       const effort2 = getTreino2Effort(row);
       const time1 = getTreino1Time(row);
       const time2 = getTreino2Time(row);
 
-      const hasSpecificMorning = effort1 !== null || time1 !== null;
-      const hasSpecificAfternoon = effort2 !== null || time2 !== null;
-      const hasGeneralShiftSession = shift && (generalEffort !== null || generalTime !== null);
+      const load1 = calcLoad(effort1, time1);
+      const load2 = calcLoad(effort2, time2);
+
       const points = [];
 
-      if(hasSpecificMorning){
+      const hasMorning =
+        effort1 !== null ||
+        time1 !== null ||
+        readiness.rec !== null ||
+        readiness.sleep !== null ||
+        readiness.fad !== null ||
+        readiness.est !== null ||
+        readiness.dor !== null;
+
+      const hasAfternoon =
+        effort2 !== null ||
+        time2 !== null;
+
+      if(hasMorning){
         points.push({
           date: onlyDate,
           shift: "Manhã",
@@ -1086,12 +1090,12 @@
           fad: readiness.fad,
           est: readiness.est,
           dor: readiness.dor,
-          load: calcLoad(effort1, time1),
+          load: load1,
           timestamp: getTimestampFromAnyDate(`${onlyDate} 08:00:00`)
         });
       }
 
-      if(hasSpecificAfternoon){
+      if(hasAfternoon){
         points.push({
           date: onlyDate,
           shift: "Tarde",
@@ -1101,23 +1105,8 @@
           fad: readiness.fad,
           est: readiness.est,
           dor: readiness.dor,
-          load: calcLoad(effort2, time2),
+          load: load2,
           timestamp: getTimestampFromAnyDate(`${onlyDate} 16:00:00`)
-        });
-      }
-
-      if(!hasSpecificMorning && !hasSpecificAfternoon && hasGeneralShiftSession){
-        points.push({
-          date: onlyDate,
-          shift: shift,
-          rec: readiness.rec,
-          rpe: generalEffort,
-          sleep: readiness.sleep,
-          fad: readiness.fad,
-          est: readiness.est,
-          dor: readiness.dor,
-          load: calcLoad(generalEffort, generalTime),
-          timestamp: getDateTimeValue(row) || getTimestampFromAnyDate(`${onlyDate} ${shift === "Manhã" ? "08:00:00" : "16:00:00"}`)
         });
       }
 
@@ -1125,11 +1114,43 @@
     }
 
     function buildSessionSeries(rows){
-      const allPoints = rows.flatMap(extractSessionPointsFromRow);
+      const grouped = {};
 
-      const sorted = [...allPoints].sort((a,b) => {
+      rows.forEach(row => {
+        const athlete = normalizeText(getName(row));
+        const points = extractSessionPointsFromRow(row);
+
+        points.forEach(point => {
+          const key = `${point.date}__${point.shift}__${athlete}`;
+
+          if(!grouped[key]){
+            grouped[key] = {
+              date: point.date,
+              shift: point.shift,
+              athlete,
+              timestamp: point.timestamp,
+              rec: point.rec,
+              rpe: point.rpe,
+              sleep: point.sleep,
+              fad: point.fad,
+              est: point.est,
+              dor: point.dor,
+              load: point.load
+            };
+          } else {
+            if(point.rec !== null) grouped[key].rec = point.rec;
+            if(point.rpe !== null) grouped[key].rpe = point.rpe;
+            if(point.sleep !== null) grouped[key].sleep = point.sleep;
+            if(point.fad !== null) grouped[key].fad = point.fad;
+            if(point.est !== null) grouped[key].est = point.est;
+            if(point.dor !== null) grouped[key].dor = point.dor;
+            if(point.load !== null) grouped[key].load = point.load;
+          }
+        });
+      });
+
+      const sorted = Object.values(grouped).sort((a,b) => {
         if(a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-        if(a.date !== b.date) return a.date.localeCompare(b.date);
         return a.shift === "Manhã" ? -1 : 1;
       });
 
@@ -1146,40 +1167,78 @@
     }
 
     function buildTeamWellnessSeries(data){
-      const grouped = {};
+      const groupedByAthleteSession = {};
 
       data.forEach(row => {
-        const sessionPoints = extractSessionPointsFromRow(row);
+        const athlete = normalizeText(getName(row));
+        if(!athlete) return;
 
-        sessionPoints.forEach(point => {
-          const key = `${point.date}__${point.shift}`;
+        const points = extractSessionPointsFromRow(row);
 
-          if(!grouped[key]){
-            grouped[key] = {
+        points.forEach(point => {
+          const key = `${point.date}__${point.shift}__${athlete}`;
+
+          if(!groupedByAthleteSession[key]){
+            groupedByAthleteSession[key] = {
               date: point.date,
               shift: point.shift,
+              athlete,
               timestamp: point.timestamp,
-              rec: [],
-              rpe: [],
-              sleep: [],
-              fad: [],
-              est: [],
-              dor: [],
-              load: []
+              rec: point.rec,
+              rpe: point.rpe,
+              sleep: point.sleep,
+              fad: point.fad,
+              est: point.est,
+              dor: point.dor,
+              load: point.load
             };
+          } else {
+            if(point.rec !== null) groupedByAthleteSession[key].rec = point.rec;
+            if(point.rpe !== null) groupedByAthleteSession[key].rpe = point.rpe;
+            if(point.sleep !== null) groupedByAthleteSession[key].sleep = point.sleep;
+            if(point.fad !== null) groupedByAthleteSession[key].fad = point.fad;
+            if(point.est !== null) groupedByAthleteSession[key].est = point.est;
+            if(point.dor !== null) groupedByAthleteSession[key].dor = point.dor;
+            if(point.load !== null) groupedByAthleteSession[key].load = point.load;
           }
-
-          if(point.rec !== null) grouped[key].rec.push(point.rec);
-          if(point.rpe !== null) grouped[key].rpe.push(point.rpe);
-          if(point.sleep !== null) grouped[key].sleep.push(point.sleep);
-          if(point.fad !== null) grouped[key].fad.push(point.fad);
-          if(point.est !== null) grouped[key].est.push(point.est);
-          if(point.dor !== null) grouped[key].dor.push(point.dor);
-          if(point.load !== null) grouped[key].load.push(point.load);
         });
       });
 
-      const orderedGroups = Object.values(grouped).sort((a, b) => a.timestamp - b.timestamp);
+      const groupedBySession = {};
+
+      Object.values(groupedByAthleteSession).forEach(point => {
+        const sessionKey = `${point.date}__${point.shift}`;
+
+        if(!groupedBySession[sessionKey]){
+          groupedBySession[sessionKey] = {
+            date: point.date,
+            shift: point.shift,
+            timestamp: getTimestampFromAnyDate(
+              `${point.date} ${point.shift === "Manhã" ? "08:00:00" : "16:00:00"}`
+            ),
+            rec: [],
+            rpe: [],
+            sleep: [],
+            fad: [],
+            est: [],
+            dor: [],
+            load: []
+          };
+        }
+
+        if(point.rec !== null) groupedBySession[sessionKey].rec.push(point.rec);
+        if(point.rpe !== null) groupedBySession[sessionKey].rpe.push(point.rpe);
+        if(point.sleep !== null) groupedBySession[sessionKey].sleep.push(point.sleep);
+        if(point.fad !== null) groupedBySession[sessionKey].fad.push(point.fad);
+        if(point.est !== null) groupedBySession[sessionKey].est.push(point.est);
+        if(point.dor !== null) groupedBySession[sessionKey].dor.push(point.dor);
+
+        if(point.load !== null && !isNaN(point.load)){
+          groupedBySession[sessionKey].load.push(point.load);
+        }
+      });
+
+      const orderedGroups = Object.values(groupedBySession).sort((a,b) => a.timestamp - b.timestamp);
 
       return {
         labels: orderedGroups.map(g => `${formatDateBR(g.date)} • ${g.shift}`),
