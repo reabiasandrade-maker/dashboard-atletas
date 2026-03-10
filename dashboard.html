@@ -832,34 +832,10 @@
     }
 
     function getCMJ(row){
-      const c1 = safeNullable(
-        row["CMJ 1"] ||
-        row["CMJ1"] ||
-        row["Salto CMJ 1"] ||
-        row["Countermovement Jump 1"]
-      );
-
-      const c2 = safeNullable(
-        row["CMJ 2"] ||
-        row["CMJ2"] ||
-        row["Salto CMJ 2"] ||
-        row["Countermovement Jump 2"]
-      );
-
-      const c3 = safeNullable(
-        row["CMJ 3"] ||
-        row["CMJ3"] ||
-        row["Salto CMJ 3"] ||
-        row["Countermovement Jump 3"]
-      );
-
-      const mediaDireta = safeNullable(
-        row["Média CMJ"] ||
-        row["MEDIA CMJ"] ||
-        row["CMJ"] ||
-        row["Média do CMJ"]
-      );
-
+      const c1 = safeNullable(row["CMJ 1"] || row["CMJ1"] || row["Salto CMJ 1"] || row["Countermovement Jump 1"]);
+      const c2 = safeNullable(row["CMJ 2"] || row["CMJ2"] || row["Salto CMJ 2"] || row["Countermovement Jump 2"]);
+      const c3 = safeNullable(row["CMJ 3"] || row["CMJ3"] || row["Salto CMJ 3"] || row["Countermovement Jump 3"]);
+      const mediaDireta = safeNullable(row["Média CMJ"] || row["MEDIA CMJ"] || row["CMJ"] || row["Média do CMJ"]);
       const valores = [c1, c2, c3].filter(v => v !== null && !isNaN(v));
       if(valores.length) return valores.reduce((a,b)=>a+b,0) / valores.length;
       if(mediaDireta !== null) return mediaDireta;
@@ -867,35 +843,10 @@
     }
 
     function getSquatJump(row){
-      const s1 = safeNullable(
-        row["Squat Jump 1"] ||
-        row["SJ 1"] ||
-        row["SJ1"] ||
-        row["Salto Squat Jump 1"]
-      );
-
-      const s2 = safeNullable(
-        row["Squat Jump 2"] ||
-        row["SJ 2"] ||
-        row["SJ2"] ||
-        row["Salto Squat Jump 2"]
-      );
-
-      const s3 = safeNullable(
-        row["Squat Jump 3"] ||
-        row["SJ 3"] ||
-        row["SJ3"] ||
-        row["Salto Squat Jump 3"]
-      );
-
-      const mediaDireta = safeNullable(
-        row["Média Squat Jump"] ||
-        row["MEDIA SQUAT JUMP"] ||
-        row["Squat Jump"] ||
-        row["SJ"] ||
-        row["Média do Squat Jump"]
-      );
-
+      const s1 = safeNullable(row["Squat Jump 1"] || row["SJ 1"] || row["SJ1"] || row["Salto Squat Jump 1"]);
+      const s2 = safeNullable(row["Squat Jump 2"] || row["SJ 2"] || row["SJ2"] || row["Salto Squat Jump 2"]);
+      const s3 = safeNullable(row["Squat Jump 3"] || row["SJ 3"] || row["SJ3"] || row["Salto Squat Jump 3"]);
+      const mediaDireta = safeNullable(row["Média Squat Jump"] || row["MEDIA SQUAT JUMP"] || row["Squat Jump"] || row["SJ"] || row["Média do Squat Jump"]);
       const valores = [s1, s2, s3].filter(v => v !== null && !isNaN(v));
       if(valores.length) return valores.reduce((a,b)=>a+b,0) / valores.length;
       if(mediaDireta !== null) return mediaDireta;
@@ -904,70 +855,41 @@
 
     function getVO2(row){
       return safe(
-        row["VO2MAX"] ||
-        row["VO2 MAX"] ||
-        row["VO₂MAX"] ||
-        row["VO2"] ||
-        row["VO2máx"] ||
-        row["VO2 MÁX"] ||
-        row["VO2 Max"] ||
-        row["VO2max"]
+        row["VO2MAX"] || row["VO2 MAX"] || row["VO₂MAX"] || row["VO2"] ||
+        row["VO2máx"] || row["VO2 MÁX"] || row["VO2 Max"] || row["VO2max"]
       );
     }
 
     function getPeso(row){
-      return safe(
-        row["PESO"] ||
-        row["Peso"] ||
-        row["MASSA CORPORAL"] ||
-        row["Massa corporal"]
-      );
+      return safe(row["PESO"] || row["Peso"] || row["MASSA CORPORAL"] || row["Massa corporal"]);
     }
 
     function getPctG(row){
       return safe(
-        row["%G"] ||
-        row["% G"] ||
-        row["PERCENTUAL DE GORDURA"] ||
-        row["% DE GORDURA"] ||
-        row["GORDURA %"] ||
-        row["Percentual de gordura"]
+        row["%G"] || row["% G"] || row["PERCENTUAL DE GORDURA"] ||
+        row["% DE GORDURA"] || row["GORDURA %"] || row["Percentual de gordura"]
       );
     }
 
     function getMassaGorda(row){
       return safe(
-        row["MASSA GORDA"] ||
-        row["Massa gorda"] ||
-        row["Massa Gorda"] ||
-        row["KG GORDURA"] ||
-        row["GORDURA KG"] ||
-        row["Massa gorda (kg)"] ||
-        row["Gordura (kg)"]
+        row["MASSA GORDA"] || row["Massa gorda"] || row["Massa Gorda"] ||
+        row["KG GORDURA"] || row["GORDURA KG"] || row["Massa gorda (kg)"] || row["Gordura (kg)"]
       );
     }
 
     function getMassaMagra(row){
       return safe(
-        row["MASSA MAGRA"] ||
-        row["Massa magra"] ||
-        row["Massa Magra"] ||
-        row["MM"] ||
-        row["MASSA LIVRE DE GORDURA"] ||
-        row["MLG"] ||
-        row["Massa magra (kg)"] ||
-        row["Massa livre de gordura"]
+        row["MASSA MAGRA"] || row["Massa magra"] || row["Massa Magra"] ||
+        row["MM"] || row["MASSA LIVRE DE GORDURA"] || row["MLG"] ||
+        row["Massa magra (kg)"] || row["Massa livre de gordura"]
       );
     }
 
     function getPctMassaMagra(row){
       return safe(
-        row["% MASSA MAGRA"] ||
-        row["% DE MASSA MAGRA"] ||
-        row["PERCENTUAL DE MASSA MAGRA"] ||
-        row["MASSA MAGRA %"] ||
-        row["% Massa Magra"] ||
-        row["Percentual de massa magra"]
+        row["% MASSA MAGRA"] || row["% DE MASSA MAGRA"] || row["PERCENTUAL DE MASSA MAGRA"] ||
+        row["MASSA MAGRA %"] || row["% Massa Magra"] || row["Percentual de massa magra"]
       );
     }
 
@@ -975,57 +897,79 @@
       const a1 = safeNullable(row["Arremesso Medicine Ball 1"] || row["Arremesso 1"] || row["Arremesso MB 1"]);
       const a2 = safeNullable(row["Arremesso Medicine Ball 2"] || row["Arremesso 2"] || row["Arremesso MB 2"]);
       const a3 = safeNullable(row["Arremesso Medicine Ball 3"] || row["Arremesso 3"] || row["Arremesso MB 3"]);
-
-      const mediaDireta = safeNullable(
-        row["Média Arremesso"] ||
-        row["MEDIA ARREMESSO"] ||
-        row["Arremesso"] ||
-        row["ARREMESSO"]
-      );
-
+      const mediaDireta = safeNullable(row["Média Arremesso"] || row["MEDIA ARREMESSO"] || row["Arremesso"] || row["ARREMESSO"]);
       const valores = [a1, a2, a3].filter(v => v !== null && !isNaN(v));
       if(valores.length) return valores.reduce((a,b)=>a+b,0) / valores.length;
       if(mediaDireta !== null) return mediaDireta;
       return 0;
     }
 
-    function getShiftSpecificValue(row, kind, shift){
-      const map = {
-        esforco: {
-          Manhã: [
-            "ESFORÇO TREINO 1", "ESFORÇO 1", "ESFORCO TREINO 1", "ESFORCO 1",
-            "PSE TREINO 1", "PSE 1", "RPE TREINO 1", "RPE 1"
-          ],
-          Tarde: [
-            "ESFORÇO TREINO 2", "ESFORÇO 2", "ESFORCO TREINO 2", "ESFORCO 2",
-            "PSE TREINO 2", "PSE 2", "RPE TREINO 2", "RPE 2"
-          ],
-          Geral: [
-            "ESFORÇO", "ESFORCO", "PSE", "RPE"
-          ]
-        },
-        tempo: {
-          Manhã: [
-            "TEMPO TREINO 1", "TEMPO DE TREINO 1", "TEMPO SESSÃO 1", "TEMPO SESSAO 1",
-            "TEMPO 1", "DURAÇÃO 1", "DURACAO 1", "DURAÇÃO TREINO 1", "DURACAO TREINO 1"
-          ],
-          Tarde: [
-            "TEMPO TREINO 2", "TEMPO DE TREINO 2", "TEMPO SESSÃO 2", "TEMPO SESSAO 2",
-            "TEMPO 2", "DURAÇÃO 2", "DURACAO 2", "DURAÇÃO TREINO 2", "DURACAO TREINO 2"
-          ],
-          Geral: [
-            "TEMPO SESSÃO", "TEMPO DA SESSÃO", "TEMPO SESSAO", "DURAÇÃO", "DURACAO", "TEMPO"
-          ]
-        }
-      };
+    function getEffortForRow(row){
+      const shift = getShiftLabel(row);
 
-      const specificKeys = map[kind][shift] || [];
-      for(const key of specificKeys){
+      const generalKeys = [
+        "ESFORÇO", "ESFORCO", "PSE", "RPE"
+      ];
+
+      for(const key of generalKeys){
         const val = safeNullable(row[key]);
         if(val !== null) return val;
       }
 
-      for(const key of map[kind].Geral){
+      if(shift === "Manhã"){
+        const treino1Keys = [
+          "ESFORÇO TREINO 1", "ESFORÇO 1", "ESFORCO TREINO 1", "ESFORCO 1",
+          "PSE TREINO 1", "PSE 1", "RPE TREINO 1", "RPE 1"
+        ];
+        for(const key of treino1Keys){
+          const val = safeNullable(row[key]);
+          if(val !== null) return val;
+        }
+      }
+
+      if(shift === "Tarde"){
+        const treino2Keys = [
+          "ESFORÇO TREINO 2", "ESFORÇO 2", "ESFORCO TREINO 2", "ESFORCO 2",
+          "PSE TREINO 2", "PSE 2", "RPE TREINO 2", "RPE 2"
+        ];
+        for(const key of treino2Keys){
+          const val = safeNullable(row[key]);
+          if(val !== null) return val;
+        }
+      }
+
+      return null;
+    }
+
+    function getTrainingTimeForRow(row){
+      const shift = getShiftLabel(row);
+
+      if(shift === "Manhã"){
+        const treino1Keys = [
+          "TEMPO TREINO 1", "TEMPO DE TREINO 1", "TEMPO SESSÃO 1", "TEMPO SESSAO 1",
+          "TEMPO 1", "DURAÇÃO 1", "DURACAO 1", "DURAÇÃO TREINO 1", "DURACAO TREINO 1"
+        ];
+        for(const key of treino1Keys){
+          const val = safeNullable(row[key]);
+          if(val !== null) return val;
+        }
+      }
+
+      if(shift === "Tarde"){
+        const treino2Keys = [
+          "TEMPO TREINO 2", "TEMPO DE TREINO 2", "TEMPO SESSÃO 2", "TEMPO SESSAO 2",
+          "TEMPO 2", "DURAÇÃO 2", "DURACAO 2", "DURAÇÃO TREINO 2", "DURACAO TREINO 2"
+        ];
+        for(const key of treino2Keys){
+          const val = safeNullable(row[key]);
+          if(val !== null) return val;
+        }
+      }
+
+      const generalKeys = [
+        "TEMPO SESSÃO", "TEMPO DA SESSÃO", "TEMPO SESSAO", "DURAÇÃO", "DURACAO", "TEMPO"
+      ];
+      for(const key of generalKeys){
         const val = safeNullable(row[key]);
         if(val !== null) return val;
       }
@@ -1034,9 +978,8 @@
     }
 
     function getTrainingLoad(row){
-      const shift = getShiftLabel(row);
-      const esforco = getShiftSpecificValue(row, "esforco", shift);
-      const tempo = getShiftSpecificValue(row, "tempo", shift);
+      const esforco = getEffortForRow(row);
+      const tempo = getTrainingTimeForRow(row);
 
       if(esforco === null || tempo === null) return null;
       return esforco * tempo;
@@ -1602,7 +1545,7 @@
         }
 
         const recVal = safeNullable(row["RECUPERAÇÃO"]);
-        const rpeVal = getShiftSpecificValue(row, "esforco", shift);
+        const rpeVal = getEffortForRow(row);
         const sleepVal = safeNullable(row["SONO"]);
         const fadVal = safeNullable(row["FADIGA"]);
         const estVal = safeNullable(row["ESTRESSE"]);
@@ -1684,10 +1627,7 @@
       } else {
         labels = monitorData.map(d => getDateLabel(d));
         rec = monitorData.map(d => safeNullable(d["RECUPERAÇÃO"]));
-        rpe = monitorData.map(d => {
-          const shift = getShiftLabel(d);
-          return getShiftSpecificValue(d, "esforco", shift);
-        });
+        rpe = monitorData.map(d => getEffortForRow(d));
         sleep = monitorData.map(d => safeNullable(d["SONO"]));
         fad = monitorData.map(d => safeNullable(d["FADIGA"]));
         est = monitorData.map(d => safeNullable(d["ESTRESSE"]));
